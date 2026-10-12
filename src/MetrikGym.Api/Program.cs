@@ -57,6 +57,14 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+app.MapGet("/healthz", () => Results.Ok(new 
+{ 
+    Status = "Healthy", 
+    Service = "MetrikGym API", 
+    Timestamp = DateTime.UtcNow 
+}))
+.WithName("RenderHealthCheck");
+
 app.MapGet("/api/health", () => Results.Ok(new 
 { 
     Status = "Healthy", 
