@@ -182,7 +182,7 @@ namespace MetrikGym.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
-                    b.Property<int>("RutinaId")
+                    b.Property<int?>("RutinaId")
                         .HasColumnType("integer");
 
                     b.Property<int>("UsuarioId")
@@ -309,8 +309,7 @@ namespace MetrikGym.Infrastructure.Persistence.Migrations
                     b.HasOne("MetrikGym.Domain.Entities.Rutina", "Rutina")
                         .WithMany("SesionesEntrenamiento")
                         .HasForeignKey("RutinaId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("MetrikGym.Domain.Entities.Usuario", "Usuario")
                         .WithMany("SesionesEntrenamiento")
