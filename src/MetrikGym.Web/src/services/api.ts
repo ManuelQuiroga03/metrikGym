@@ -1,8 +1,9 @@
 import type { Ejercicio, Rutina, SesionEntrenamiento, UltimoRegistroEjercicio, UserProfile } from '../types';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL 
-  ? `${import.meta.env.VITE_API_BASE_URL.replace(/\/+$/, '')}/api` 
-  : '/api';
+const API_BASE = (import.meta.env.VITE_API_BASE_URL 
+  ? import.meta.env.VITE_API_BASE_URL.replace(/\/+$/, '') 
+  : 'https://metrikgym.onrender.com') + '/api';
+
 
 
 class ApiService {
@@ -59,7 +60,15 @@ class ApiService {
 
   // Auth
   async login(email: string, password: string) {
-    const data = await this.request<{ token: string; nombre: string; email: string; rol: string }>(
+    const data = await this.request<{
+      id: number;
+      email: string;
+      nombre: string;
+      rol: string;
+      tiempoDescansoDefectoSegundos: number;
+      token: string;
+      expiresAtUtc: string;
+    }>(
       '/auth/login',
       {
         method: 'POST',
@@ -70,12 +79,20 @@ class ApiService {
     return data;
   }
 
-  async register(nombre: string, email: string, password: string) {
-    const data = await this.request<{ token: string; nombre: string; email: string; rol: string }>(
+  async register(nombre: string, email: string, password: string, tiempoDescansoDefectoSegundos: number = 90) {
+    const data = await this.request<{
+      id: number;
+      email: string;
+      nombre: string;
+      rol: string;
+      tiempoDescansoDefectoSegundos: number;
+      token: string;
+      expiresAtUtc: string;
+    }>(
       '/auth/register',
       {
         method: 'POST',
-        body: JSON.stringify({ nombre, email, password }),
+        body: JSON.stringify({ nombre, email, password, tiempoDescansoDefectoSegundos }),
       }
     );
     this.setToken(data.token);
