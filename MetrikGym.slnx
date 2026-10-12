@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MetrikGym.Api/MetrikGym.Api.csproj" />
+    <Project Path="src/MetrikGym.Application/MetrikGym.Application.csproj" />
+    <Project Path="src/MetrikGym.Domain/MetrikGym.Domain.csproj" />
+    <Project Path="src/MetrikGym.Infrastructure/MetrikGym.Infrastructure.csproj" />
+  </Folder>
+</Solution>
