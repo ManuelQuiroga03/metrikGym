@@ -34,44 +34,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess, onClose
           throw new Error('Por favor completa todos los campos requeridos.');
         }
 
-        const res = await fetch('/api/auth/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            nombre: nombre.trim(),
-            email: email.trim(),
-            password: password.trim(),
-            tiempoDescansoDefectoSegundos: descansoSegundos,
-          }),
-        });
-
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.message || 'Error al registrar usuario.');
-        }
-
-        api.setToken(data.token);
+        const data = await api.register(
+          nombre.trim(),
+          email.trim(),
+          password.trim()
+        );
         onSuccess(data);
       } else {
         if (!email.trim() || !password.trim()) {
           throw new Error('Ingresa tu correo y contraseña.');
         }
 
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: email.trim(),
-            password: password.trim(),
-          }),
-        });
-
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.message || 'Credenciales incorrectas.');
-        }
-
-        api.setToken(data.token);
+        const data = await api.login(
+          email.trim(),
+          password.trim()
+        );
         onSuccess(data);
       }
     } catch (err: any) {
