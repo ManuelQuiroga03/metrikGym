@@ -17,8 +17,9 @@ COPY . .
 WORKDIR "/src/src/MetrikGym.Api"
 RUN dotnet publish "MetrikGym.Api.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
-# Runtime final ultraligero
+# Runtime final con dependencias SSL y Kerberos para Npgsql
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+RUN apt-get update && apt-get install -y --no-install-recommends libgssapi-krb5-2 ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/publish .
 
