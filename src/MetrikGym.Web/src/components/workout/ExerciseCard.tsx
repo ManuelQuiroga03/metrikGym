@@ -253,14 +253,14 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
           <button
             type="button"
             onClick={() => setIsUnilateral(!isUnilateral)}
-            className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+            className={`px-2 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
               isUnilateral
                 ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-300'
                 : 'bg-[#182333] border-[#25364D] text-gray-400 hover:text-gray-200'
             }`}
             title="Alternar modo bilateral o por extremidad (Derecho / Izquierdo)"
           >
-            {isUnilateral ? 'Unilateral (D/I)' : 'Bilateral'}
+            {isUnilateral ? 'Unilateral' : 'Bilateral'}
           </button>
 
           {/* Collapse / Expand Toggle */}
@@ -280,26 +280,26 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
         <>
           {/* Progressive Overload Benchmark Reference */}
           {ultimoRegistro && (
-            <div className="flex items-center justify-between my-2.5 px-3 py-1.5 rounded-xl bg-[#0D141F] border border-[#1B2738] text-xs">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between my-2 px-2.5 py-1.5 rounded-xl bg-[#0D141F] border border-[#1B2738] text-xs gap-2">
+              <div className="flex items-center gap-1.5 truncate">
                 <Target className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span className="text-gray-400">Última sesión:</span>
-                <span className="font-bold font-tabular text-amber-300">
-                  {ultimoRegistro.pesoKg} kg × {ultimoRegistro.repeticiones} reps
+                <span className="text-gray-400">Prev:</span>
+                <span className="font-bold font-tabular text-amber-300 truncate">
+                  {ultimoRegistro.pesoKg}k × {ultimoRegistro.repeticiones}
                 </span>
                 {ultimoRegistro.rpe && (
-                  <span className="text-gray-500 text-[11px]">(@RPE {ultimoRegistro.rpe})</span>
+                  <span className="text-gray-500 text-[10px] hidden sm:inline">(@RPE {ultimoRegistro.rpe})</span>
                 )}
               </div>
 
               <button
                 type="button"
                 onClick={() => activeSerie && applyGhostValue(activeSerie.id)}
-                className="flex items-center gap-1 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 cursor-pointer bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20"
-                title="Copiar última marca al set activo"
+                className="flex items-center gap-1 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 cursor-pointer bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 shrink-0"
+                title="Copiar marca al set activo"
               >
                 <Sparkles className="w-3 h-3" />
-                <span>Copiar a Set #{activeSerie?.numeroSerie || 1}</span>
+                <span>Copiar #{activeSerie?.numeroSerie || 1}</span>
               </button>
             </div>
           )}
@@ -309,23 +309,24 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="text-[11px] font-bold uppercase tracking-wider text-gray-400 border-b border-[#1F2C3F]/60 pb-2">
-                  <th className="py-2 px-1 text-center w-10">Set</th>
-                  <th className="py-2 px-2 text-center">Previo</th>
+                  <th className="py-2 px-1 text-center w-8">#</th>
+                  <th className="py-2 px-1 text-center text-gray-500 text-[10px]">Prev</th>
                   {isUnilateral ? (
                     <>
-                      <th className="py-2 px-2 text-center text-cyan-300">Lado D (Kg × Reps)</th>
-                      <th className="py-2 px-1 text-center w-12 text-cyan-300">Check D</th>
-                      <th className="py-2 px-2 text-center text-purple-300">Lado I (Kg × Reps)</th>
-                      <th className="py-2 px-1 text-center w-12 text-purple-300">Check I</th>
+                      <th className="py-2 px-1 text-center text-cyan-300">D (Kg × Reps)</th>
+                      <th className="py-2 px-1 text-center w-8 text-cyan-300">✓ D</th>
+                      <th className="py-2 px-1 text-center text-purple-300">I (Kg × Reps)</th>
+                      <th className="py-2 px-1 text-center w-8 text-purple-300">✓ I</th>
                     </>
                   ) : (
                     <>
                       <th className="py-2 px-2 text-center w-24">Kg</th>
                       <th className="py-2 px-2 text-center w-20">Reps</th>
                       <th className="py-2 px-2 text-center w-16">RPE</th>
-                      <th className="py-2 px-2 text-center w-14">Check</th>
+                      <th className="py-2 px-2 text-center w-12">✓</th>
                     </>
                   )}
+
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#1F2C3F]/40">
@@ -383,35 +384,43 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
                       {isUnilateral ? (
                         <>
                           {/* Right Side Inputs (D) */}
-                          <td className="py-2 px-1.5 text-center" onClick={(e) => e.stopPropagation()}>
+                          <td className="py-2 px-1 text-center" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-center gap-1">
                               <input
                                 type="number"
                                 step="0.5"
-                                value={serie.pesoKg === 0 ? '' : serie.pesoKg}
-                                onFocus={() => setActiveSerieId(serie.id)}
-                                onChange={(e) =>
-                                  onUpdateSerie(serie.id, 'pesoKg', parseFloat(e.target.value) || 0)
-                                }
-                                placeholder="kg"
-                                className="w-14 text-center py-1 px-1 rounded bg-[#16202E] border border-cyan-500/30 text-white font-bold text-xs outline-none focus:border-cyan-400"
+                                value={serie.pesoKg === 0 ? '' : (serie.pesoKg ?? '')}
+                                onFocus={(e) => {
+                                  setActiveSerieId(serie.id);
+                                  e.currentTarget.select();
+                                }}
+                                onChange={(e) => {
+                                  const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                  onUpdateSerie(serie.id, 'pesoKg', isNaN(val) ? 0 : val);
+                                }}
+                                placeholder="0"
+                                className="w-13 text-center py-1.5 px-1 rounded-lg bg-[#16202E] border border-cyan-500/30 text-white font-bold text-xs outline-none focus:border-cyan-400"
                               />
                               <span className="text-gray-500 text-[10px]">×</span>
                               <input
                                 type="number"
-                                value={serie.repeticiones === 0 ? '' : serie.repeticiones}
-                                onFocus={() => setActiveSerieId(serie.id)}
-                                onChange={(e) =>
-                                  onUpdateSerie(serie.id, 'repeticiones', parseInt(e.target.value) || 0)
-                                }
-                                placeholder="reps"
-                                className="w-12 text-center py-1 px-1 rounded bg-[#16202E] border border-cyan-500/30 text-white font-bold text-xs outline-none focus:border-cyan-400"
+                                value={serie.repeticiones === 0 ? '' : (serie.repeticiones ?? '')}
+                                onFocus={(e) => {
+                                  setActiveSerieId(serie.id);
+                                  e.currentTarget.select();
+                                }}
+                                onChange={(e) => {
+                                  const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+                                  onUpdateSerie(serie.id, 'repeticiones', isNaN(val) ? 0 : val);
+                                }}
+                                placeholder="0"
+                                className="w-11 text-center py-1.5 px-1 rounded-lg bg-[#16202E] border border-cyan-500/30 text-white font-bold text-xs outline-none focus:border-cyan-400"
                               />
                             </div>
                           </td>
 
                           {/* Right Check (D) */}
-                          <td className="py-2 px-1 text-center" onClick={(e) => e.stopPropagation()}>
+                          <td className="py-2 px-0.5 text-center" onClick={(e) => e.stopPropagation()}>
                             <button
                               type="button"
                               onClick={() => handleToggleUnilateralSide(serie.id, 'D')}
@@ -420,36 +429,52 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
                                   ? 'bg-cyan-400 text-black font-black shadow-md shadow-cyan-950 ring-1 ring-cyan-300'
                                   : 'bg-[#1B2738] border border-cyan-500/40 text-gray-400 hover:text-white hover:border-cyan-400'
                               }`}
-                              title={serie.completadaDer ? 'Lado derecho completado (toca para desmarcar)' : 'Marcar lado derecho'}
+                              title={serie.completadaDer ? 'Lado D listo' : 'Marcar lado D'}
                             >
                               <Check className={`w-3.5 h-3.5 stroke-[3] ${serie.completadaDer ? 'text-black' : 'text-gray-400'}`} />
                             </button>
                           </td>
 
                           {/* Left Side Inputs (I) */}
-                          <td className="py-2 px-1.5 text-center" onClick={(e) => e.stopPropagation()}>
+                          <td className="py-2 px-1 text-center" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-center gap-1">
                               <input
                                 type="number"
                                 step="0.5"
-                                value={serie.pesoKgIzq ?? (serie.pesoKg === 0 ? '' : serie.pesoKg)}
-                                onFocus={() => setActiveSerieId(serie.id)}
-                                onChange={(e) =>
-                                  onUpdateSerie(serie.id, 'pesoKgIzq', parseFloat(e.target.value) || 0)
+                                value={
+                                  serie.pesoKgIzq !== undefined && serie.pesoKgIzq !== null
+                                    ? (serie.pesoKgIzq === 0 ? '' : serie.pesoKgIzq)
+                                    : (serie.pesoKg === 0 ? '' : (serie.pesoKg ?? ''))
                                 }
-                                placeholder="kg"
-                                className="w-14 text-center py-1 px-1 rounded bg-[#16202E] border border-purple-500/30 text-white font-bold text-xs outline-none focus:border-purple-400"
+                                onFocus={(e) => {
+                                  setActiveSerieId(serie.id);
+                                  e.currentTarget.select();
+                                }}
+                                onChange={(e) => {
+                                  const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                  onUpdateSerie(serie.id, 'pesoKgIzq', isNaN(val) ? 0 : val);
+                                }}
+                                placeholder="0"
+                                className="w-13 text-center py-1.5 px-1 rounded-lg bg-[#16202E] border border-purple-500/30 text-white font-bold text-xs outline-none focus:border-purple-400"
                               />
                               <span className="text-gray-500 text-[10px]">×</span>
                               <input
                                 type="number"
-                                value={serie.repsIzq ?? (serie.repeticiones === 0 ? '' : serie.repeticiones)}
-                                onFocus={() => setActiveSerieId(serie.id)}
-                                onChange={(e) =>
-                                  onUpdateSerie(serie.id, 'repsIzq', parseInt(e.target.value) || 0)
+                                value={
+                                  serie.repsIzq !== undefined && serie.repsIzq !== null
+                                    ? (serie.repsIzq === 0 ? '' : serie.repsIzq)
+                                    : (serie.repeticiones === 0 ? '' : (serie.repeticiones ?? ''))
                                 }
-                                placeholder="reps"
-                                className="w-12 text-center py-1 px-1 rounded bg-[#16202E] border border-purple-500/30 text-white font-bold text-xs outline-none focus:border-purple-400"
+                                onFocus={(e) => {
+                                  setActiveSerieId(serie.id);
+                                  e.currentTarget.select();
+                                }}
+                                onChange={(e) => {
+                                  const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+                                  onUpdateSerie(serie.id, 'repsIzq', isNaN(val) ? 0 : val);
+                                }}
+                                placeholder="0"
+                                className="w-11 text-center py-1.5 px-1 rounded-lg bg-[#16202E] border border-purple-500/30 text-white font-bold text-xs outline-none focus:border-purple-400"
                               />
                             </div>
                           </td>
@@ -464,7 +489,7 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
                                   ? 'bg-purple-500 text-black font-black shadow-md shadow-purple-950 ring-1 ring-purple-300'
                                   : 'bg-[#1B2738] border border-purple-500/40 text-gray-400 hover:text-white hover:border-purple-400'
                               }`}
-                              title={serie.completadaIzq ? 'Lado izquierdo completado (toca para desmarcar)' : 'Marcar lado izquierdo'}
+                              title={serie.completadaIzq ? 'Lado I listo' : 'Marcar lado I'}
                             >
                               <Check className={`w-3.5 h-3.5 stroke-[3] ${serie.completadaIzq ? 'text-black' : 'text-gray-400'}`} />
                             </button>
@@ -478,11 +503,15 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
                             <input
                               type="number"
                               step="0.5"
-                              value={serie.pesoKg === 0 ? '' : serie.pesoKg}
-                              onFocus={() => setActiveSerieId(serie.id)}
-                              onChange={(e) =>
-                                onUpdateSerie(serie.id, 'pesoKg', parseFloat(e.target.value) || 0)
-                              }
+                              value={serie.pesoKg === 0 ? '' : (serie.pesoKg ?? '')}
+                              onFocus={(e) => {
+                                setActiveSerieId(serie.id);
+                                e.currentTarget.select();
+                              }}
+                              onChange={(e) => {
+                                const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                onUpdateSerie(serie.id, 'pesoKg', isNaN(val) ? 0 : val);
+                              }}
                               placeholder="0"
                               className={`w-full text-center py-1.5 px-2 rounded-lg font-bold font-tabular text-sm border outline-none transition-all ${
                                 isSelected
@@ -496,11 +525,15 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
                           <td className="py-2 px-1.5 text-center" onClick={(e) => e.stopPropagation()}>
                             <input
                               type="number"
-                              value={serie.repeticiones === 0 ? '' : serie.repeticiones}
-                              onFocus={() => setActiveSerieId(serie.id)}
-                              onChange={(e) =>
-                                onUpdateSerie(serie.id, 'repeticiones', parseInt(e.target.value) || 0)
-                              }
+                              value={serie.repeticiones === 0 ? '' : (serie.repeticiones ?? '')}
+                              onFocus={(e) => {
+                                setActiveSerieId(serie.id);
+                                e.currentTarget.select();
+                              }}
+                              onChange={(e) => {
+                                const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+                                onUpdateSerie(serie.id, 'repeticiones', isNaN(val) ? 0 : val);
+                              }}
                               placeholder="0"
                               className={`w-full text-center py-1.5 px-2 rounded-lg font-bold font-tabular text-sm border outline-none transition-all ${
                                 isSelected
@@ -517,7 +550,10 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
                               step="0.5"
                               max="10"
                               value={serie.rpe || ''}
-                              onFocus={() => setActiveSerieId(serie.id)}
+                              onFocus={(e) => {
+                                setActiveSerieId(serie.id);
+                                e.currentTarget.select();
+                              }}
                               onChange={(e) =>
                                 onUpdateSerie(serie.id, 'rpe', parseFloat(e.target.value) || null)
                               }
@@ -562,7 +598,7 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
             <div className="flex items-center justify-between gap-1 text-[11px] font-semibold text-gray-400 mb-2 flex-wrap">
               <span className="flex items-center gap-1 text-gray-300">
                 <ChevronRight className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Ajuste rápido para Set #{activeSerie?.numeroSerie || 1}:</span>
+                <span>Ajuste Set #{activeSerie?.numeroSerie || 1}:</span>
                 <span className="text-emerald-400 font-tabular font-bold ml-1">
                   {activeSerie?.pesoKg || 0} {unidadPeso} × {activeSerie?.repeticiones || 0} reps
                 </span>

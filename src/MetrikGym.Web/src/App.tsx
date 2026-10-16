@@ -11,7 +11,7 @@ import { WorkoutHistory } from './components/history/WorkoutHistory';
 import { ProfileSettings, type UserPreferences } from './components/profile/ProfileSettings';
 import { AuthModal } from './components/auth/AuthModal';
 import type { Ejercicio, Rutina, SesionEntrenamiento, UltimoRegistroEjercicio, SerieRegistro } from './types';
-import { CATALOGO_EJERCICIOS, RUTINAS_MILO, RUTINA_DEMO_RECLUTADOR } from './data/seedData';
+import { CATALOGO_EJERCICIOS, RUTINAS_MILO, RUTINA_DEMO_RECLUTADOR, HISTORIAL_DEMO_RECLUTADOR } from './data/seedData';
 import { storageService } from './services/storageService';
 
 const DEFAULT_PREFERENCES: UserPreferences = {
@@ -64,16 +64,22 @@ export function App() {
     localStorage.setItem('metrikgym_preferences', JSON.stringify(updated));
   };
 
-  // Guardar historial en localStorage
+  // Guardar historial en localStorage (solo para usuario real)
   const handleSaveHistorial = (updated: SesionEntrenamiento[]) => {
     setHistorial(updated);
-    storageService.saveHistory(updated);
+    const auth = storageService.getAuthSession();
+    if (!auth?.isGuest) {
+      storageService.saveHistory(updated);
+    }
   };
 
-  // Guardar ultimos registros en localStorage
+  // Guardar ultimos registros en localStorage (solo para usuario real)
   const handleSaveUltimosRegistros = (updated: UltimoRegistroEjercicio[]) => {
     setUltimosRegistros(updated);
-    localStorage.setItem('metrikgym_ultimos_registros', JSON.stringify(updated));
+    const auth = storageService.getAuthSession();
+    if (!auth?.isGuest) {
+      localStorage.setItem('metrikgym_ultimos_registros', JSON.stringify(updated));
+    }
   };
 
   // Guardar sesion activa en localStorage para recuperar tras recargar o cerrar pestaña
@@ -100,13 +106,15 @@ export function App() {
     if (!currentAuth) {
       setIsAuthModalOpen(true);
     } else {
-      // Si es invitado / reclutador, cargar rutina demo si no hay rutinas
+      // Si es invitado / reclutador, aislar rutinas e historial demo
       if (currentAuth.isGuest) {
         setRutinas(RUTINA_DEMO_RECLUTADOR);
+        setHistorial(HISTORIAL_DEMO_RECLUTADOR);
       } else {
-        // Milo: asegurar las 4 rutinas oficiales
+        // Milo: asegurar las 4 rutinas oficiales y su historial real
         const savedRutinas = localStorage.getItem('metrikgym_rutinas');
         setRutinas(savedRutinas ? JSON.parse(savedRutinas) : RUTINAS_MILO);
+        setHistorial(storageService.getHistory());
       }
     }
 
@@ -145,11 +153,14 @@ export function App() {
 
     if (userData.isGuest) {
       setRutinas(RUTINA_DEMO_RECLUTADOR);
+      setHistorial(HISTORIAL_DEMO_RECLUTADOR);
     } else {
       const saved = localStorage.getItem('metrikgym_rutinas');
       setRutinas(saved ? JSON.parse(saved) : RUTINAS_MILO);
+      setHistorial(storageService.getHistory());
     }
   };
+
 
 
   const handleStartRoutine = async (rutinaId: number) => {
@@ -244,8 +255,11 @@ export function App() {
     const nuevoHistorial = [finalizada, ...historial];
     handleSaveHistorial(nuevoHistorial);
 
-    // 2. Apendar a la cola outbox (búfer para Supabase)
-    storageService.addToOutbox(finalizada);
+    // 2. Apendar a la cola outbox (solo usuario real para sincronizar a Supabase)
+    const currentAuth = storageService.getAuthSession();
+    if (!currentAuth?.isGuest) {
+      storageService.addToOutbox(finalizada);
+    }
 
     // 3. Actualizar caché de últimos registros para progressive overload
     const updatedUltimos: UltimoRegistroEjercicio[] = [...ultimosRegistros];
