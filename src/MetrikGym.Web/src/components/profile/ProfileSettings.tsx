@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Volume2, Bell, Vibrate, Dumbbell, Play, Save, Check, Sparkles, LogOut, Database, Cloud, Download, RefreshCw, FileCode, CheckCircle2 } from 'lucide-react';
+import { Volume2, Bell, Vibrate, Dumbbell, Play, Save, Check, Sparkles, LogOut, Database, Cloud, Download, RefreshCw, FileCode, CheckCircle2, Trash2 } from 'lucide-react';
 import { TONOS_DISPONIBLES, playRestAlert, type TonoAlerta } from '../../utils/audio';
 import { AVATARES_PREDISEÑADOS } from '../../utils/avatars';
 import { storageService } from '../../services/storageService';
@@ -414,6 +414,7 @@ const SyncBackupSection: React.FC = () => {
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [copiedSql, setCopiedSql] = useState(false);
+  const [confirmingClear, setConfirmingClear] = useState(false);
 
   const handleSyncToSupabase = async () => {
     setSyncing(true);
@@ -431,6 +432,13 @@ const SyncBackupSection: React.FC = () => {
     } finally {
       setSyncing(false);
     }
+  };
+
+  const handleClearOutbox = () => {
+    storageService.clearOutbox();
+    setOutboxCount(0);
+    setConfirmingClear(false);
+    setSyncResult('🗑️ Cola de salida vaciada con éxito. Los datos de prueba no se subirán a Supabase.');
   };
 
   const handleCopySql = () => {
@@ -502,6 +510,45 @@ const SyncBackupSection: React.FC = () => {
           {copiedSql ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <FileCode className="w-3.5 h-3.5 text-amber-400" />}
           <span>{copiedSql ? '¡SQL Copiado al Portapapeles!' : 'Copiar como sentencias SQL INSERT para Supabase'}</span>
         </button>
+      )}
+
+      {/* Botón para Vaciar Cola de Salida (Limpiar sesiones de prueba) */}
+      {confirmingClear ? (
+        <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-between gap-2 flex-wrap">
+          <span className="text-xs text-rose-300 font-semibold">
+            ¿Vaciar las {outboxCount} sesión(es) de prueba del búfer?
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleClearOutbox}
+              className="px-3 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-400 text-black font-black text-xs cursor-pointer active:scale-95"
+            >
+              Sí, vaciar
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmingClear(false)}
+              className="px-3 py-1.5 rounded-lg bg-[#182333] hover:bg-[#202F44] text-gray-300 font-bold text-xs cursor-pointer"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : (
+        outboxCount > 0 && (
+          <div className="flex items-center justify-between pt-1">
+            <button
+              type="button"
+              onClick={() => setConfirmingClear(true)}
+              className="py-1.5 px-3 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 hover:text-rose-300 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              title="Vaciar la cola para no subir sesiones de prueba a Supabase"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Vaciar / Limpiar Cola ({outboxCount})</span>
+            </button>
+          </div>
+        )
       )}
     </div>
   );
