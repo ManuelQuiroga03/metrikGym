@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Dumbbell, Lock, Mail, ArrowRight, AlertCircle, Sparkles, ShieldCheck, Briefcase } from 'lucide-react';
 import { storageService } from '../../services/storageService';
+import { PulseLoader } from '../common/PulseLoader';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -12,6 +13,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
   const [email, setEmail] = useState('quirogamanuel21@gmail.com');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingLabel, setLoadingLabel] = useState('');
+  const [loadingColor, setLoadingColor] = useState<'emerald' | 'cyan'>('emerald');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -20,39 +23,44 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
   const handleMiloLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
-    setLoading(true);
 
-    try {
-      const cleanEmail = email.trim().toLowerCase();
-      if (!cleanEmail || !password.trim()) {
-        throw new Error('Ingresa tu correo y contraseña.');
-      }
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !password.trim()) {
+      setErrorMessage('Ingresa tu correo y contraseña.');
+      return;
+    }
 
-      // Validación de acceso seguro para Milo
-      if (cleanEmail === 'quirogamanuel21@gmail.com' && password === 'Milojr0307#') {
-        const userData = {
-          id: 2,
-          email: 'quirogamanuel21@gmail.com',
-          nombre: 'Milo',
-          rol: 'Admin',
-          tiempoDescansoDefectoSegundos: 180,
-          isGuest: false,
-        };
+    // Validación de acceso seguro para Milo
+    if (cleanEmail === 'quirogamanuel21@gmail.com' && password === 'Milojr0307#') {
+      setLoading(true);
+      setLoadingColor('emerald');
+      setLoadingLabel('Iniciando sesión segura & cargando catálogo local...');
 
+      const userData = {
+        id: 2,
+        email: 'quirogamanuel21@gmail.com',
+        nombre: 'Milo',
+        rol: 'Admin',
+        tiempoDescansoDefectoSegundos: 180,
+        isGuest: false,
+      };
+
+      setTimeout(() => {
         storageService.saveAuthSession(userData);
+        setLoading(false);
         onSuccess(userData);
-      } else {
-        throw new Error('Credenciales incorrectas para el perfil de Milo.');
-      }
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Error de autenticación.');
-    } finally {
-      setLoading(false);
+      }, 700);
+    } else {
+      setErrorMessage('Credenciales incorrectas para el perfil de Milo.');
     }
   };
 
   // Acceso instantáneo para Reclutador / Invitado de Portafolio
   const handleGuestLogin = () => {
+    setLoading(true);
+    setLoadingColor('cyan');
+    setLoadingLabel('Preparando entorno Demo para Reclutador...');
+
     const guestData = {
       id: 999,
       email: 'recruiter.demo@metrikgym.com',
@@ -62,8 +70,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
       isGuest: true,
     };
 
-    storageService.saveAuthSession(guestData);
-    onSuccess(guestData);
+    setTimeout(() => {
+      storageService.saveAuthSession(guestData);
+      setLoading(false);
+      onSuccess(guestData);
+    }, 700);
   };
 
   return (
@@ -87,89 +98,96 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
           </p>
         </div>
 
-        {/* Botón Destacado: Modo Reclutador / Demo */}
-        <div className="mb-5 p-3.5 rounded-2xl bg-gradient-to-r from-cyan-950/40 to-blue-950/40 border border-cyan-500/30 text-center">
-          <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-cyan-300 mb-1">
-            <Briefcase className="w-4 h-4 text-cyan-400" />
-            <span>¿Estás evaluando mi perfil o portafolio?</span>
+        {loading ? (
+          <div className="py-8">
+            <PulseLoader color={loadingColor} label={loadingLabel} />
           </div>
-          <p className="text-[11px] text-gray-400 mb-3">
-            Explora la interfaz interactiva, calculadora de placas y rutinas sin ingresar credenciales.
-          </p>
-          <button
-            type="button"
-            onClick={handleGuestLogin}
-            className="w-full py-2.5 px-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-extrabold text-xs shadow-lg shadow-cyan-950/50 flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer"
-          >
-            <Sparkles className="w-4 h-4 fill-black" />
-            <span>Ingresar como Reclutador / Modo Demo</span>
-          </button>
-        </div>
+        ) : (
+          <>
+            {/* Botón Destacado: Modo Reclutador / Demo */}
+            <div className="mb-5 p-3.5 rounded-2xl bg-gradient-to-r from-cyan-950/40 to-blue-950/40 border border-cyan-500/30 text-center">
+              <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-cyan-300 mb-1">
+                <Briefcase className="w-4 h-4 text-cyan-400" />
+                <span>¿Estás evaluando mi perfil o portafolio?</span>
+              </div>
+              <p className="text-[11px] text-gray-400 mb-3">
+                Explora la interfaz interactiva, calculadora de placas y rutinas sin ingresar credenciales.
+              </p>
+              <button
+                type="button"
+                onClick={handleGuestLogin}
+                className="w-full py-2.5 px-4 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-extrabold text-xs shadow-lg shadow-cyan-950/50 flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 fill-black" />
+                <span>Ingresar como Reclutador / Modo Demo</span>
+              </button>
+            </div>
 
-        <div className="relative flex py-2 items-center mb-4">
-          <div className="flex-grow border-t border-[#1F2C3F]"></div>
-          <span className="flex-shrink mx-3 text-[10px] uppercase font-bold text-gray-500 tracking-wider">o acceso de Atleta</span>
-          <div className="flex-grow border-t border-[#1F2C3F]"></div>
-        </div>
+            <div className="relative flex py-2 items-center mb-4">
+              <div className="flex-grow border-t border-[#1F2C3F]"></div>
+              <span className="flex-shrink mx-3 text-[10px] uppercase font-bold text-gray-500 tracking-wider">o acceso de Atleta</span>
+              <div className="flex-grow border-t border-[#1F2C3F]"></div>
+            </div>
 
-        {/* Error Alert */}
-        {errorMessage && (
-          <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center gap-2 text-xs text-rose-300">
-            <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
-            <span>{errorMessage}</span>
-          </div>
+            {/* Error Alert */}
+            {errorMessage && (
+              <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center gap-2 text-xs text-rose-300">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            {/* Form para Milo */}
+            <form onSubmit={handleMiloLogin} className="space-y-3.5">
+              <div>
+                <label className="text-xs font-semibold text-gray-300 block mb-1">
+                  Correo Electrónico:
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-gray-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="quirogamanuel21@gmail.com"
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#182333] border border-[#25364D] text-white text-sm outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-300 block mb-1">
+                  Contraseña:
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-gray-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="password"
+                    required
+                    placeholder="••••••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#182333] border border-[#25364D] text-white text-sm outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-sm shadow-lg shadow-emerald-950 flex items-center justify-center gap-2 transition-all cursor-pointer mt-2 active:scale-95"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                <span>Iniciar Sesión (Milo)</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </form>
+
+            <p className="text-[11px] text-gray-500 text-center mt-4">
+              La sesión se mantiene activa de forma segura durante 4 horas.
+            </p>
+          </>
         )}
-
-        {/* Form para Milo */}
-        <form onSubmit={handleMiloLogin} className="space-y-3.5">
-          <div>
-            <label className="text-xs font-semibold text-gray-300 block mb-1">
-              Correo Electrónico:
-            </label>
-            <div className="relative">
-              <Mail className="w-4 h-4 text-gray-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="quirogamanuel21@gmail.com"
-                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#182333] border border-[#25364D] text-white text-sm outline-none focus:border-emerald-500"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-gray-300 block mb-1">
-              Contraseña:
-            </label>
-            <div className="relative">
-              <Lock className="w-4 h-4 text-gray-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="password"
-                required
-                placeholder="••••••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-[#182333] border border-[#25364D] text-white text-sm outline-none focus:border-emerald-500"
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-sm shadow-lg shadow-emerald-950 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 mt-2"
-          >
-            <ShieldCheck className="w-4 h-4" />
-            <span>Iniciar Sesión (Milo)</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </form>
-
-        <p className="text-[11px] text-gray-500 text-center mt-4">
-          La sesión se mantiene activa de forma segura durante 4 horas.
-        </p>
       </div>
     </div>
   );

@@ -13,6 +13,8 @@ import { AuthModal } from './components/auth/AuthModal';
 import type { Ejercicio, Rutina, SesionEntrenamiento, UltimoRegistroEjercicio, SerieRegistro } from './types';
 import { CATALOGO_EJERCICIOS, RUTINAS_MILO, RUTINA_DEMO_RECLUTADOR, HISTORIAL_DEMO_RECLUTADOR } from './data/seedData';
 import { storageService } from './services/storageService';
+import { PulseLoader } from './components/common/PulseLoader';
+import { WorkoutCelebrationModal } from './components/workout/WorkoutCelebrationModal';
 
 const DEFAULT_PREFERENCES: UserPreferences = {
   avatarId: 'power-beast',
@@ -34,6 +36,9 @@ export function App() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [activeSession, setActiveSession] = useState<SesionEntrenamiento | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isFinishingWorkout, setIsFinishingWorkout] = useState(false);
+  const [celebrationSession, setCelebrationSession] = useState<SesionEntrenamiento | null>(null);
+  const [isCelebrationOpen, setIsCelebrationOpen] = useState(false);
   
   // Preferencias de usuario
   const [preferences, setPreferences] = useState<UserPreferences>(() => {
@@ -243,6 +248,9 @@ export function App() {
   const handleFinishWorkout = (notas?: string) => {
     if (!activeSession) return;
 
+    // Mostrar loader de guardado por 1.5 segundos
+    setIsFinishingWorkout(true);
+
     const finalizada: SesionEntrenamiento = {
       ...activeSession,
       fechaHoraFin: new Date().toISOString(),
@@ -284,7 +292,13 @@ export function App() {
 
     // 4. Limpiar sesión activa
     handleUpdateActiveSession(null);
-    setCurrentTab('history');
+
+    // 5. Tras 1.5s de spinner, abrir modal de trofeo y lanzar confeti
+    setTimeout(() => {
+      setIsFinishingWorkout(false);
+      setCelebrationSession(finalizada);
+      setIsCelebrationOpen(true);
+    }, 1500);
   };
 
 
@@ -642,6 +656,29 @@ export function App() {
         isOpen={isAuthModalOpen}
         onSuccess={handleAuthSuccess}
         onClose={() => setIsAuthModalOpen(false)}
+      />
+
+      {/* Overlay de Carga: Guardando Sesión con PulseLoader (1.5s) */}
+      {isFinishingWorkout && (
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-4 animate-in fade-in duration-200">
+          <PulseLoader
+            color="emerald"
+            label="Guardando entrenamiento & calculando sobrecarga progresiva..."
+          />
+        </div>
+      )}
+
+      {/* Modal de Celebración con Trofeo SVG y Confeti */}
+      <WorkoutCelebrationModal
+        isOpen={isCelebrationOpen}
+        onClose={() => {
+          setIsCelebrationOpen(false);
+          setCelebrationSession(null);
+          setCurrentTab('history');
+        }}
+        sesion={celebrationSession}
+        userName={preferences.nombre}
+        unidadPeso={preferences.unidadPeso}
       />
 
     </div>

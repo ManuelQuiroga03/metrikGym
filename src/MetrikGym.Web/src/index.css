@@ -56,3 +56,76 @@
 .timer-ring-alert {
   animation: timerPulse 1.2s infinite ease-in-out;
 }
+
+/* Pulsing radar circular loader */
+.pulse-loader {
+  --color-1: rgba(16, 185, 129, 0.45);
+  --color-2: #10B981;
+  --size: 1px;
+
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 5.5rem;
+  aspect-ratio: 1 / 1;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.pulse-loader.loader-cyan {
+  --color-1: rgba(6, 182, 212, 0.45);
+  --color-2: #06B6D4;
+}
+
+.pulse-loader.loader-amber {
+  --color-1: rgba(245, 158, 11, 0.45);
+  --color-2: #F59E0B;
+}
+
+.pulse-loader:before,
+.pulse-loader:after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  animation: pulsOut 1.8s ease-in-out infinite;
+  filter: drop-shadow(0 0 0.8rem var(--color-1));
+}
+
+.pulse-loader:before {
+  width: 100%;
+  padding-bottom: 100%;
+  box-shadow: inset 0 0 0 0.8rem var(--color-2);
+  animation-name: pulsIn;
+}
+
+.pulse-loader:after {
+  width: calc(100% - 1.6rem);
+  padding-bottom: calc(100% - 1.6rem);
+  box-shadow: 0 0 0 0 var(--color-2);
+}
+
+@keyframes pulsIn {
+  0% {
+    box-shadow: inset 0 0 0 0.8rem var(--color-2);
+    opacity: 1;
+  }
+  50%,
+  100% {
+    box-shadow: inset 0 0 0 0 var(--color-2);
+    opacity: 0;
+  }
+}
+
+@keyframes pulsOut {
+  0%,
+  50% {
+    box-shadow: 0 0 0 0 var(--color-2);
+    opacity: 0;
+  }
+  100% {
+    box-shadow: 0 0 0 0.8rem var(--color-2);
+    opacity: 1;
+  }
+}
