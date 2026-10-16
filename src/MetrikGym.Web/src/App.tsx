@@ -11,7 +11,8 @@ import { WorkoutHistory } from './components/history/WorkoutHistory';
 import { ProfileSettings, type UserPreferences } from './components/profile/ProfileSettings';
 import { AuthModal } from './components/auth/AuthModal';
 import type { Ejercicio, Rutina, SesionEntrenamiento, UltimoRegistroEjercicio, SerieRegistro } from './types';
-import { api } from './services/api';
+import { CATALOGO_EJERCICIOS, RUTINAS_MILO, RUTINA_DEMO_RECLUTADOR } from './data/seedData';
+import { storageService } from './services/storageService';
 
 const DEFAULT_PREFERENCES: UserPreferences = {
   avatarId: 'power-beast',
@@ -40,13 +41,18 @@ export function App() {
     return saved ? JSON.parse(saved) : DEFAULT_PREFERENCES;
   });
 
-  // State data con respaldo inmediato en localStorage
-  const [ejercicios, setEjercicios] = useState<Ejercicio[]>([]);
-  const [rutinas, setRutinas] = useState<Rutina[]>([]);
-  const [historial, setHistorial] = useState<SesionEntrenamiento[]>(() => {
-    const saved = localStorage.getItem('metrikgym_history');
-    return saved ? JSON.parse(saved) : [];
+  // State data con respaldo inmediato en localStorage e inicialización con 80 ejercicios oficiales
+  const [ejercicios, setEjercicios] = useState<Ejercicio[]>(() => {
+    const saved = localStorage.getItem('metrikgym_ejercicios');
+    return saved ? JSON.parse(saved) : CATALOGO_EJERCICIOS;
   });
+
+  const [rutinas, setRutinas] = useState<Rutina[]>(() => {
+    const saved = localStorage.getItem('metrikgym_rutinas');
+    return saved ? JSON.parse(saved) : RUTINAS_MILO;
+  });
+
+  const [historial, setHistorial] = useState<SesionEntrenamiento[]>(() => storageService.getHistory());
   const [ultimosRegistros, setUltimosRegistros] = useState<UltimoRegistroEjercicio[]>(() => {
     const saved = localStorage.getItem('metrikgym_ultimos_registros');
     return saved ? JSON.parse(saved) : [];
@@ -61,7 +67,7 @@ export function App() {
   // Guardar historial en localStorage
   const handleSaveHistorial = (updated: SesionEntrenamiento[]) => {
     setHistorial(updated);
-    localStorage.setItem('metrikgym_history', JSON.stringify(updated));
+    storageService.saveHistory(updated);
   };
 
   // Guardar ultimos registros en localStorage
@@ -73,19 +79,12 @@ export function App() {
   // Guardar sesion activa en localStorage para recuperar tras recargar o cerrar pestaña
   const handleUpdateActiveSession = (session: SesionEntrenamiento | null) => {
     setActiveSession(session);
-    if (session) {
-      localStorage.setItem('metrikgym_active_session', JSON.stringify(session));
-    } else {
-      localStorage.removeItem('metrikgym_active_session');
-    }
+    storageService.saveActiveSession(session);
   };
 
-  // Network listener & auto-sync
+  // Network listener
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      syncPendingOfflineSessions();
-    };
+    const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -95,89 +94,32 @@ export function App() {
     };
   }, []);
 
-  // Check token and recover active session on initial load
+  // Verificar sesión con expiración de 4 horas y recuperar sesión activa
   useEffect(() => {
-    const token = api.getToken();
-    if (!token) {
+    const currentAuth = storageService.getAuthSession();
+    if (!currentAuth) {
       setIsAuthModalOpen(true);
+    } else {
+      // Si es invitado / reclutador, cargar rutina demo si no hay rutinas
+      if (currentAuth.isGuest) {
+        setRutinas(RUTINA_DEMO_RECLUTADOR);
+      } else {
+        // Milo: asegurar las 4 rutinas oficiales
+        const savedRutinas = localStorage.getItem('metrikgym_rutinas');
+        setRutinas(savedRutinas ? JSON.parse(savedRutinas) : RUTINAS_MILO);
+      }
     }
 
     // Recuperar sesión activa interrumpida del almacenamiento local
-    const savedSession = localStorage.getItem('metrikgym_active_session');
+    const savedSession = storageService.getActiveSession();
     if (savedSession) {
-      try {
-        const parsed = JSON.parse(savedSession);
-        setActiveSession(parsed);
-        setCurrentTab('workout');
-      } catch (err) {
-        console.warn('Error recovering active session from localStorage:', err);
-      }
+      setActiveSession(savedSession);
+      setCurrentTab('workout');
     }
   }, []);
 
-  // Initial Data Fetch from API + Offline queue check
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const ej = await api.getEjercicios();
-        if (ej && ej.length > 0) setEjercicios(ej);
 
-        const r = await api.getRutinas();
-        if (r && r.length > 0) setRutinas(r);
 
-        const h = await api.getHistorial();
-        if (h && h.length > 0) handleSaveHistorial(h);
-
-        const activa = await api.getSesionActiva();
-        if (activa) {
-          handleUpdateActiveSession(activa);
-          setCurrentTab('workout');
-        }
-
-        // Si hay sesiones pendientes creadas offline, sincronizarlas
-        await syncPendingOfflineSessions();
-      } catch {
-        console.log('Cargando datos demostrativos para previsualización inmediata...');
-        setupMockData();
-      }
-    }
-    loadData();
-  }, []);
-
-  const setupMockData = () => {
-    const mockEjercicios: Ejercicio[] = [
-      { id: 1, nombre: 'Press de Banca Plano con Barra', grupoMuscular: 'Pecho', esUnilateral: false, esPersonalizado: false },
-      { id: 2, nombre: 'Press Inclinado con Mancuernas', grupoMuscular: 'Pecho', esUnilateral: false, esPersonalizado: false },
-      { id: 3, nombre: 'Remo con Barra Pendlay', grupoMuscular: 'Espalda', esUnilateral: false, esPersonalizado: false },
-      { id: 4, nombre: 'Press Militar de Pie con Barra', grupoMuscular: 'Hombro', esUnilateral: false, esPersonalizado: false },
-      { id: 5, nombre: 'Elevaciones Laterales en Polea', grupoMuscular: 'Hombro', esUnilateral: true, esPersonalizado: false },
-      { id: 6, nombre: 'Sentadilla Libre con Barra', grupoMuscular: 'Cuádriceps', esUnilateral: false, esPersonalizado: false },
-      { id: 7, nombre: 'Hip Thrust con Barra', grupoMuscular: 'Glúteo', esUnilateral: false, esPersonalizado: false },
-    ];
-    setEjercicios(mockEjercicios);
-
-    const mockRutinas: Rutina[] = [
-      {
-        id: 1,
-        usuarioId: 1,
-        nombre: 'Torso Pesado (Fuerza A)',
-        diaSugerido: 'Lunes',
-        activa: true,
-        ejercicios: [
-          { id: 101, ejercicioId: 1, ejercicioNombre: 'Press de Banca Plano con Barra', grupoMuscular: 'Pecho', esUnilateral: false, orden: 1, seriesObjetivo: 4, descansoSegundos: 120 },
-          { id: 102, ejercicioId: 3, ejercicioNombre: 'Remo con Barra Pendlay', grupoMuscular: 'Espalda', esUnilateral: false, orden: 2, seriesObjetivo: 4, descansoSegundos: 120 },
-          { id: 103, ejercicioId: 4, ejercicioNombre: 'Press Militar de Pie con Barra', grupoMuscular: 'Hombro', esUnilateral: false, orden: 3, seriesObjetivo: 3, descansoSegundos: 90 },
-          { id: 104, ejercicioId: 5, ejercicioNombre: 'Elevaciones Laterales en Polea', grupoMuscular: 'Hombro', esUnilateral: true, orden: 4, seriesObjetivo: 3, descansoSegundos: 60 },
-        ],
-      },
-    ];
-    setRutinas(mockRutinas);
-
-    handleSaveUltimosRegistros([
-      { ejercicioId: 1, ejercicioNombre: 'Press de Banca Plano con Barra', fechaHora: new Date().toISOString(), pesoKg: 80, repeticiones: 8, rpe: 8.5 },
-      { ejercicioId: 3, ejercicioNombre: 'Remo con Barra Pendlay', fechaHora: new Date().toISOString(), pesoKg: 75, repeticiones: 8, rpe: 8.0 },
-    ]);
-  };
 
   const getRutinaSugeridaHoy = (): Rutina | undefined => {
     if (rutinas.length === 0) return undefined;
@@ -201,11 +143,14 @@ export function App() {
     };
     handleSavePreferences(updated);
 
-    // Recargar datos desde la API
-    api.getEjercicios().then((ej) => ej && ej.length > 0 && setEjercicios(ej));
-    api.getRutinas().then((r) => r && r.length > 0 && setRutinas(r));
-    api.getHistorial().then((h) => h && h.length > 0 && handleSaveHistorial(h));
+    if (userData.isGuest) {
+      setRutinas(RUTINA_DEMO_RECLUTADOR);
+    } else {
+      const saved = localStorage.getItem('metrikgym_rutinas');
+      setRutinas(saved ? JSON.parse(saved) : RUTINAS_MILO);
+    }
   };
+
 
   const handleStartRoutine = async (rutinaId: number) => {
     const rutina = rutinas.find((r) => r.id === rutinaId);
@@ -241,7 +186,7 @@ export function App() {
 
     const nuevaSesion: SesionEntrenamiento = {
       id: Date.now(),
-      usuarioId: 1,
+      usuarioId: 2,
       rutinaId: rutina.id,
       rutinaNombre: rutina.nombre,
       fechaHoraInicio: new Date().toISOString(),
@@ -250,79 +195,17 @@ export function App() {
 
     handleUpdateActiveSession(nuevaSesion);
     setCurrentTab('workout');
-
-    // Intentar iniciar sesión real en PostgreSQL en Podman
-    try {
-      const dbSesion = await api.iniciarSesion(rutina.id);
-      if (dbSesion && dbSesion.id) {
-        handleUpdateActiveSession({
-          ...nuevaSesion,
-          id: dbSesion.id,
-          series: nuevaSesion.series.map((s) => ({ ...s, sesionId: dbSesion.id })),
-        });
-      }
-    } catch (err) {
-      console.warn('Iniciando sesión en modo local / offline:', err);
-    }
   };
+
 
   // Sincronizar cola de entrenamientos pendientes guardados offline
-  const syncPendingOfflineSessions = async () => {
-    try {
-      const queueRaw = localStorage.getItem('metrikgym_offline_sync_queue');
-      if (!queueRaw) return;
-      const queue: SesionEntrenamiento[] = JSON.parse(queueRaw);
-      if (!Array.isArray(queue) || queue.length === 0) return;
-
-      const remaining: SesionEntrenamiento[] = [];
-      for (const sesion of queue) {
-        try {
-          const completedSets = sesion.series.filter((s) => s.completada);
-          const synced = await api.syncSesion({
-            rutinaId: sesion.rutinaId && sesion.rutinaId > 0 ? sesion.rutinaId : null,
-            rutinaNombre: sesion.rutinaNombre,
-            fechaHoraInicio: sesion.fechaHoraInicio,
-            fechaHoraFin: sesion.fechaHoraFin,
-            notas: sesion.notas,
-            series: completedSets.map((s) => ({
-              ejercicioId: s.ejercicioId,
-              numeroSerie: s.numeroSerie,
-              pesoKg: Number(s.pesoKg || 0),
-              repeticiones: Number(s.repeticiones || 0),
-              lado: s.lado || null,
-              rpe: s.rpe ? Number(s.rpe) : null,
-            })),
-          });
-
-          // Reemplazar ID temporal con ID real en el historial local
-          setHistorial((prev) => {
-            const updated = prev.map((item) => (item.id === sesion.id ? synced : item));
-            localStorage.setItem('metrikgym_history', JSON.stringify(updated));
-            return updated;
-          });
-        } catch (syncErr) {
-          console.warn('No se pudo sincronizar sesión offline en este momento:', syncErr);
-          remaining.push(sesion);
-        }
-      }
-
-      if (remaining.length > 0) {
-        localStorage.setItem('metrikgym_offline_sync_queue', JSON.stringify(remaining));
-      } else {
-        localStorage.removeItem('metrikgym_offline_sync_queue');
-      }
-    } catch (err) {
-      console.warn('Error en syncPendingOfflineSessions:', err);
-    }
-  };
-
-  const handleStartEmptyWorkout = async () => {
-    const primerEj = ejercicios[0];
+  const handleStartEmptyWorkout = () => {
+    const primerEj = ejercicios[0] || CATALOGO_EJERCICIOS[0];
     const ultimo = primerEj ? ultimosRegistros.find((u) => u.ejercicioId === primerEj.id) : null;
 
     const nuevaSesion: SesionEntrenamiento = {
       id: Date.now(),
-      usuarioId: 1,
+      usuarioId: 2,
       rutinaId: 0,
       rutinaNombre: 'Entrenamiento Libre',
       fechaHoraInicio: new Date().toISOString(),
@@ -330,8 +213,8 @@ export function App() {
         {
           id: Date.now(),
           sesionId: 0,
-          ejercicioId: primerEj?.id || 1,
-          ejercicioNombre: primerEj?.nombre || 'Press de Banca Plano con Barra',
+          ejercicioId: primerEj?.id || 82,
+          ejercicioNombre: primerEj?.nombre || 'Press plano con barra',
           grupoMuscular: primerEj?.grupoMuscular || 'Pecho',
           numeroSerie: 1,
           pesoKg: ultimo?.pesoKg || 60,
@@ -343,23 +226,10 @@ export function App() {
 
     handleUpdateActiveSession(nuevaSesion);
     setCurrentTab('workout');
-
-    // Intentar registrar la sesión abierta en PostgreSQL
-    try {
-      const dbSesion = await api.iniciarSesion(0);
-      if (dbSesion && dbSesion.id) {
-        handleUpdateActiveSession({
-          ...nuevaSesion,
-          id: dbSesion.id,
-          series: nuevaSesion.series.map((s) => ({ ...s, sesionId: dbSesion.id })),
-        });
-      }
-    } catch (err) {
-      console.warn('Iniciando entrenamiento libre en modo offline/local:', err);
-    }
   };
 
-  const handleFinishWorkout = async (notas?: string) => {
+
+  const handleFinishWorkout = (notas?: string) => {
     if (!activeSession) return;
 
     const finalizada: SesionEntrenamiento = {
@@ -368,58 +238,16 @@ export function App() {
       notas,
     };
 
+    const completedSets = finalizada.series.filter((s) => s.completada);
+
+    // 1. Guardar de inmediato en el historial de la app
     const nuevoHistorial = [finalizada, ...historial];
     handleSaveHistorial(nuevoHistorial);
 
-    // Intentar guardar en base de datos PostgreSQL
-    let syncExitosa = false;
-    const completedSets = finalizada.series.filter((s) => s.completada);
+    // 2. Apendar a la cola outbox (búfer para Supabase)
+    storageService.addToOutbox(finalizada);
 
-    // Si tiene un ID real existente en base de datos
-    if (activeSession.id && activeSession.id < 100000000) {
-      try {
-        await api.finalizarSesion(activeSession.id, notas);
-        syncExitosa = true;
-      } catch (err) {
-        console.warn('Error al finalizar en backend, agregando a cola de sync:', err);
-      }
-    } else {
-      // Si fue creada offline con ID timestamp temporal, sincronizar completa
-      try {
-        const synced = await api.syncSesion({
-          rutinaId: finalizada.rutinaId && finalizada.rutinaId > 0 ? finalizada.rutinaId : null,
-          rutinaNombre: finalizada.rutinaNombre,
-          fechaHoraInicio: finalizada.fechaHoraInicio,
-          fechaHoraFin: finalizada.fechaHoraFin,
-          notas: finalizada.notas,
-          series: completedSets.map((s) => ({
-            ejercicioId: s.ejercicioId,
-            numeroSerie: s.numeroSerie,
-            pesoKg: Number(s.pesoKg || 0),
-            repeticiones: Number(s.repeticiones || 0),
-            lado: s.lado || null,
-            rpe: s.rpe ? Number(s.rpe) : null,
-          })),
-        });
-        if (synced && synced.id) {
-          syncExitosa = true;
-          // Actualizar historial local con el ID persistido real
-          handleSaveHistorial([synced, ...historial]);
-        }
-      } catch (err) {
-        console.warn('No hay conexión directa para sync inmediato, encolando offline:', err);
-      }
-    }
-
-    // Si falló la conexión con el backend, encolar en cola offline para reintento automático
-    if (!syncExitosa) {
-      const queueRaw = localStorage.getItem('metrikgym_offline_sync_queue');
-      const queue: SesionEntrenamiento[] = queueRaw ? JSON.parse(queueRaw) : [];
-      queue.push(finalizada);
-      localStorage.setItem('metrikgym_offline_sync_queue', JSON.stringify(queue));
-    }
-
-    // Actualizar cache de últimos registros
+    // 3. Actualizar caché de últimos registros para progressive overload
     const updatedUltimos: UltimoRegistroEjercicio[] = [...ultimosRegistros];
     completedSets.forEach((s) => {
       const existingIdx = updatedUltimos.findIndex((u) => u.ejercicioId === s.ejercicioId);
@@ -440,9 +268,11 @@ export function App() {
     });
     handleSaveUltimosRegistros(updatedUltimos);
 
+    // 4. Limpiar sesión activa
     handleUpdateActiveSession(null);
     setCurrentTab('history');
   };
+
 
   const handleDeleteHistorySession = (sesionId: number) => {
     handleSaveHistorial(historial.filter((h) => h.id !== sesionId));
@@ -497,26 +327,11 @@ export function App() {
         ...prev,
         series: updatedSeries,
       };
-      localStorage.setItem('metrikgym_active_session', JSON.stringify(updatedSession));
-
-      // Si se marcó como completada y la sesión tiene ID de BD, sincronizar con backend
-      if (fields.completada === true && updatedSession.id && updatedSession.id < 1000000000) {
-        const target = updatedSeries.find((s) => s.id === serieId);
-        if (target) {
-          api.registrarSerie(updatedSession.id, {
-            ejercicioId: target.ejercicioId,
-            numeroSerie: target.numeroSerie,
-            pesoKg: target.pesoKg,
-            repeticiones: target.repeticiones,
-            lado: target.lado,
-            rpe: target.rpe,
-          }).catch((err) => console.warn('Sync serie error:', err));
-        }
-      }
-
+      storageService.saveActiveSession(updatedSession);
       return updatedSession;
     });
   };
+
 
   const handleUpdateSerieField = (serieId: number, field: any, value: any) => {
     handleUpdateSerieFields(serieId, { [field]: value });
@@ -571,21 +386,44 @@ export function App() {
     });
   };
 
-  const handleCreateRoutine = async (data: { nombre: string; diaSugerido?: string; ejercicios: any[] }) => {
-    try {
-      const created = await api.createRutina(data);
-      setRutinas([...rutinas, created]);
-    } catch {
-      const nueva: Rutina = {
-        id: Date.now(),
-        usuarioId: 1,
+  const handleCreateRoutine = (data: { nombre: string; diaSugerido?: string; ejercicios: any[] }) => {
+    const nueva: Rutina = {
+      id: Date.now(),
+      usuarioId: 2,
+      nombre: data.nombre,
+      diaSugerido: data.diaSugerido,
+      activa: true,
+      ejercicios: data.ejercicios.map((e) => {
+        const ref = ejercicios.find((ej) => ej.id === e.ejercicioId);
+        return {
+          id: Date.now() + Math.random(),
+          ejercicioId: e.ejercicioId,
+          ejercicioNombre: ref?.nombre || 'Ejercicio',
+          grupoMuscular: ref?.grupoMuscular || 'Pecho',
+          esUnilateral: ref?.esUnilateral || false,
+          orden: e.orden,
+          seriesObjetivo: e.seriesObjetivo,
+          descansoSegundos: e.descansoSegundos,
+        };
+      }),
+    };
+    const updated = [...rutinas, nueva];
+    setRutinas(updated);
+    localStorage.setItem('metrikgym_rutinas', JSON.stringify(updated));
+  };
+
+  const handleUpdateRoutine = (id: number, data: { nombre: string; diaSugerido?: string; activa: boolean; ejercicios: any[] }) => {
+    const updated = rutinas.map((r) => {
+      if (r.id !== id) return r;
+      return {
+        ...r,
         nombre: data.nombre,
         diaSugerido: data.diaSugerido,
-        activa: true,
+        activa: data.activa,
         ejercicios: data.ejercicios.map((e) => {
           const ref = ejercicios.find((ej) => ej.id === e.ejercicioId);
           return {
-            id: Date.now() + Math.random(),
+            id: e.id || Date.now() + Math.random(),
             ejercicioId: e.ejercicioId,
             ejercicioNombre: ref?.nombre || 'Ejercicio',
             grupoMuscular: ref?.grupoMuscular || 'Pecho',
@@ -596,96 +434,49 @@ export function App() {
           };
         }),
       };
-      setRutinas([...rutinas, nueva]);
-    }
+    });
+    setRutinas(updated);
+    localStorage.setItem('metrikgym_rutinas', JSON.stringify(updated));
   };
 
-  const handleUpdateRoutine = async (id: number, data: { nombre: string; diaSugerido?: string; activa: boolean; ejercicios: any[] }) => {
-    try {
-      const updated = await api.updateRutina(id, data);
-      setRutinas(rutinas.map((r) => (r.id === id ? updated : r)));
-    } catch {
-      setRutinas(
-        rutinas.map((r) => {
-          if (r.id !== id) return r;
-          return {
-            ...r,
-            nombre: data.nombre,
-            diaSugerido: data.diaSugerido,
-            activa: data.activa,
-            ejercicios: data.ejercicios.map((e) => {
-              const ref = ejercicios.find((ej) => ej.id === e.ejercicioId);
-              return {
-                id: e.id || Date.now() + Math.random(),
-                ejercicioId: e.ejercicioId,
-                ejercicioNombre: ref?.nombre || 'Ejercicio',
-                grupoMuscular: ref?.grupoMuscular || 'Pecho',
-                esUnilateral: ref?.esUnilateral || false,
-                orden: e.orden,
-                seriesObjetivo: e.seriesObjetivo,
-                descansoSegundos: e.descansoSegundos,
-              };
-            }),
-          };
-        })
-      );
-    }
+  const handleDeleteRoutine = (rutinaId: number) => {
+    const updated = rutinas.filter((r) => r.id !== rutinaId);
+    setRutinas(updated);
+    localStorage.setItem('metrikgym_rutinas', JSON.stringify(updated));
   };
 
-  const handleDeleteRoutine = async (rutinaId: number) => {
-    setRutinas(rutinas.filter((r) => r.id !== rutinaId));
-    try {
-      await api.deleteRutina(rutinaId);
-    } catch (err) {
-      console.warn('Error deleting routine from backend:', err);
-    }
+  const handleCreateEjercicio = (data: { nombre: string; grupoMuscular: string; esUnilateral: boolean; crearComoGlobal?: boolean }) => {
+    const nuevo: Ejercicio = {
+      id: Date.now(),
+      nombre: data.nombre,
+      grupoMuscular: data.grupoMuscular,
+      esUnilateral: data.esUnilateral,
+      esPersonalizado: !data.crearComoGlobal,
+      usuarioId: data.crearComoGlobal ? null : 2,
+    };
+    const updated = [nuevo, ...ejercicios];
+    setEjercicios(updated);
+    localStorage.setItem('metrikgym_ejercicios', JSON.stringify(updated));
   };
 
-  const handleCreateEjercicio = async (data: { nombre: string; grupoMuscular: string; esUnilateral: boolean; crearComoGlobal?: boolean }) => {
-    try {
-      const created = await api.createEjercicio(data);
-      setEjercicios([created, ...ejercicios]);
-    } catch {
-      const nuevo: Ejercicio = {
-        id: Date.now(),
-        nombre: data.nombre,
-        grupoMuscular: data.grupoMuscular,
-        esUnilateral: data.esUnilateral,
-        esPersonalizado: !data.crearComoGlobal,
-        usuarioId: data.crearComoGlobal ? null : 1,
-      };
-      setEjercicios([nuevo, ...ejercicios]);
-    }
+  const handleUpdateEjercicio = (id: number, data: { nombre: string; grupoMuscular: string; esUnilateral: boolean }) => {
+    const updated = ejercicios.map((e) => (e.id === id ? { ...e, ...data } : e));
+    setEjercicios(updated);
+    localStorage.setItem('metrikgym_ejercicios', JSON.stringify(updated));
   };
 
-  const handleUpdateEjercicio = async (id: number, data: { nombre: string; grupoMuscular: string; esUnilateral: boolean }) => {
-    try {
-      const updated = await api.updateEjercicio(id, data);
-      setEjercicios(ejercicios.map((e) => (e.id === id ? updated : e)));
-    } catch {
-      setEjercicios(
-        ejercicios.map((e) => (e.id === id ? { ...e, ...data } : e))
-      );
-    }
+  const handleDeleteEjercicio = (id: number) => {
+    const updated = ejercicios.filter((e) => e.id !== id);
+    setEjercicios(updated);
+    localStorage.setItem('metrikgym_ejercicios', JSON.stringify(updated));
   };
 
-  const handleDeleteEjercicio = async (id: number) => {
-    setEjercicios(ejercicios.filter((e) => e.id !== id));
-    try {
-      await api.deleteEjercicio(id);
-    } catch (err) {
-      console.warn('Error deleting exercise from backend:', err);
-    }
+  const handlePromoteEjercicio = (id: number) => {
+    const updated = ejercicios.map((e) => (e.id === id ? { ...e, esPersonalizado: false, usuarioId: null } : e));
+    setEjercicios(updated);
+    localStorage.setItem('metrikgym_ejercicios', JSON.stringify(updated));
   };
 
-  const handlePromoteEjercicio = async (id: number) => {
-    try {
-      const promoted = await api.promoverEjercicioAGlobal(id);
-      setEjercicios(ejercicios.map((e) => (e.id === id ? promoted : e)));
-    } catch (err) {
-      console.warn('Error promoting exercise:', err);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-[#0B0F17] text-gray-100 flex flex-col selection:bg-emerald-500 selection:text-black">
@@ -712,7 +503,28 @@ export function App() {
 
         {/* Content Viewport */}
         <main className="flex-1 p-4 sm:p-6 md:p-8 max-w-4xl mx-auto w-full">
+          {storageService.getAuthSession()?.isGuest && (
+            <div className="mb-4 p-3 rounded-2xl bg-cyan-950/40 border border-cyan-500/30 flex items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                <span className="text-cyan-200 font-medium">
+                  Modo Portafolio / Reclutador Activo • Explora métricas, temporizador y calculadora de discos libremente.
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  storageService.clearAuthSession();
+                  setIsAuthModalOpen(true);
+                }}
+                className="text-[11px] font-bold text-cyan-400 hover:text-white underline cursor-pointer shrink-0"
+              >
+                Cambiar Perfil
+              </button>
+            </div>
+          )}
+
           {currentTab === 'dashboard' && (
+
             <DashboardHome
               userName={preferences.nombre}
               rutinaSugerida={getRutinaSugeridaHoy()}
@@ -794,7 +606,7 @@ export function App() {
               preferences={preferences}
               onSavePreferences={handleSavePreferences}
               onLogout={() => {
-                api.setToken(null);
+                storageService.clearAuthSession();
                 setIsAuthModalOpen(true);
               }}
             />
@@ -802,6 +614,7 @@ export function App() {
         </main>
 
       </div>
+
 
       {/* Mobile Bottom Navigation */}
       <BottomNav

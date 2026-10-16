@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Volume2, Bell, Vibrate, Dumbbell, Play, Save, Check, Sparkles, LogOut } from 'lucide-react';
+import { Volume2, Bell, Vibrate, Dumbbell, Play, Save, Check, Sparkles, LogOut, Database, Cloud, Download, RefreshCw, FileCode, CheckCircle2 } from 'lucide-react';
 import { TONOS_DISPONIBLES, playRestAlert, type TonoAlerta } from '../../utils/audio';
 import { AVATARES_PREDISEÑADOS } from '../../utils/avatars';
+import { storageService } from '../../services/storageService';
+import { supabaseDirectService } from '../../services/supabaseDirectService';
 
 export interface UserPreferences {
   avatarId: string;
@@ -388,7 +390,10 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
         </div>
       </div>
 
-      {/* 4. Cuenta y Sesión */}
+      {/* 4. Respaldo y Sincronización Local / Supabase */}
+      <SyncBackupSection />
+
+      {/* 5. Cuenta y Sesión */}
       <div className="pt-2">
         <button
           onClick={onLogout}
@@ -398,7 +403,107 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
           <span>Cerrar Sesión</span>
         </button>
       </div>
-
     </div>
   );
 };
+
+// Subcomponente de Respaldo y Sincronización Local / Supabase
+const SyncBackupSection: React.FC = () => {
+
+  const [outboxCount, setOutboxCount] = useState(storageService.getOutbox().length);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+  const [copiedSql, setCopiedSql] = useState(false);
+
+  const handleSyncToSupabase = async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const { syncedCount, errors } = await supabaseDirectService.syncOutboxToSupabase();
+      setOutboxCount(storageService.getOutbox().length);
+      if (errors.length === 0) {
+        setSyncResult(`✅ ¡Sincronizado! Se subieron ${syncedCount} sesión(es) directamente a Supabase.`);
+      } else {
+        setSyncResult(`⚠️ Sincronizadas ${syncedCount}. Errores: ${errors.join(', ')}`);
+      }
+    } catch (err: any) {
+      setSyncResult(`❌ Error de conexión: ${err.message || 'Verifica tu internet'}`);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleCopySql = () => {
+    const sql = supabaseDirectService.generateSqlInsertsFromOutbox();
+    navigator.clipboard.writeText(sql);
+    setCopiedSql(true);
+    setTimeout(() => setCopiedSql(false), 2500);
+  };
+
+  return (
+    <div className="rounded-2xl p-4 sm:p-5 bg-[#131B26] border border-[#1F2C3F] space-y-4 shadow-xl">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+          <Database className="w-4 h-4 text-emerald-400" />
+          <span>Búfer Local & Sincronización Supabase</span>
+        </h3>
+        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+          outboxCount > 0 
+            ? 'bg-amber-500/15 border-amber-500/30 text-amber-300' 
+            : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+        }`}>
+          {outboxCount} pendientes en búfer
+        </span>
+      </div>
+
+      <p className="text-xs text-gray-400">
+        Tus entrenamientos se guardan primero en tu teléfono al 100% sin depender de red. Al terminar o llegar a casa, puedes subirlos directo a Supabase.
+      </p>
+
+      {syncResult && (
+        <div className="p-3 rounded-xl bg-[#0D141F] border border-[#25364D] text-xs text-gray-200">
+          {syncResult}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        <button
+          type="button"
+          onClick={handleSyncToSupabase}
+          disabled={syncing || outboxCount === 0}
+          className="py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-black font-extrabold text-xs shadow-lg shadow-emerald-950 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-40"
+        >
+          {syncing ? (
+            <RefreshCw className="w-4 h-4 animate-spin text-black" />
+          ) : (
+            <Cloud className="w-4 h-4 text-black" />
+          )}
+          <span>{syncing ? 'Subiendo a Supabase...' : 'Sincronizar a Supabase'}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => storageService.downloadOutboxAsJsonFile()}
+          disabled={outboxCount === 0}
+          className="py-2.5 px-3.5 rounded-xl bg-[#182333] hover:bg-[#202F44] border border-[#25364D] text-gray-300 hover:text-white font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-40"
+          title="Descargar tus entrenamientos en un archivo físico .json"
+        >
+          <Download className="w-4 h-4 text-cyan-400" />
+          <span>Descargar .json</span>
+        </button>
+      </div>
+
+      {outboxCount > 0 && (
+        <button
+          type="button"
+          onClick={handleCopySql}
+          className="w-full py-2 px-3 rounded-lg bg-[#0F1621] hover:bg-[#16202E] border border-[#202F44] text-[11px] font-semibold text-gray-400 hover:text-amber-300 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+        >
+          {copiedSql ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <FileCode className="w-3.5 h-3.5 text-amber-400" />}
+          <span>{copiedSql ? '¡SQL Copiado al Portapapeles!' : 'Copiar como sentencias SQL INSERT para Supabase'}</span>
+        </button>
+      )}
+    </div>
+  );
+};
+
