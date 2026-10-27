@@ -100,6 +100,45 @@ export const supabaseDirectService = {
   },
 
   /**
+   * Descarga el historial real del usuario desde Supabase PostgREST
+   */
+  async fetchUserHistoryFromSupabase(userId: number = 2): Promise<SesionEntrenamiento[]> {
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/SesionesEntrenamiento?UsuarioId=eq.${userId}&select=*,SeriesRegistro(*),Rutinas(Nombre)&order=FechaHoraInicio.desc`,
+        {
+          method: 'GET',
+          headers: DEFAULT_HEADERS,
+        }
+      );
+      if (!res.ok) return [];
+      const data = await res.json();
+      return (data || []).map((s: any) => ({
+        id: s.Id,
+        usuarioId: s.UsuarioId,
+        rutinaId: s.RutinaId,
+        rutinaNombre: s.Rutinas?.Nombre || 'Entrenamiento',
+        fechaHoraInicio: s.FechaHoraInicio,
+        fechaHoraFin: s.FechaHoraFin,
+        notas: s.Notas,
+        series: (s.SeriesRegistro || []).map((sr: any) => ({
+          id: sr.Id,
+          sesionId: s.Id,
+          ejercicioId: sr.EjercicioId,
+          numeroSerie: sr.NumeroSerie,
+          pesoKg: sr.PesoKg,
+          repeticiones: sr.Repeticiones,
+          lado: sr.Lado,
+          rpe: sr.RPE,
+          completada: true,
+        })),
+      }));
+    } catch {
+      return [];
+    }
+  },
+
+  /**
    * Genera el script SQL puro INSERT INTO por si Milo prefiere copiar y pegar en Supabase SQL Editor.
    */
   generateSqlInsertsFromOutbox(): string {

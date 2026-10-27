@@ -22,6 +22,8 @@ interface LiveWorkoutTrackerProps {
   onAddExerciseToWorkout: (ejercicioId: number) => void;
   onSwapExercise?: (oldEjercicioId: number, newEjercicio: Ejercicio) => void;
   unidadPeso?: 'kg' | 'lbs';
+  onTriggerRest?: (descansoSegundos?: number | null) => void;
+  onToggleWeightUnit?: () => void;
 }
 
 export const LiveWorkoutTracker: React.FC<LiveWorkoutTrackerProps> = ({
@@ -39,6 +41,8 @@ export const LiveWorkoutTracker: React.FC<LiveWorkoutTrackerProps> = ({
   onUpdateSerieFields,
   onAddExerciseToWorkout,
   onSwapExercise,
+  onTriggerRest,
+  onToggleWeightUnit,
 }) => {
   // Session Elapsed Timer
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -162,12 +166,17 @@ export const LiveWorkoutTracker: React.FC<LiveWorkoutTrackerProps> = ({
   };
 
   const handleTriggerRest = (descansoSegundos?: number | null) => {
-    // Haptic light vibration on set check
+    // Si App.tsx maneja el temporizador de forma global (para resistir cambios de pestaña)
+    if (onTriggerRest) {
+      onTriggerRest(descansoSegundos);
+      return;
+    }
+
+    // Fallback local
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate([30, 40, 30]);
     }
 
-    // Start exercise-specific rest countdown con timestamp absoluto
     const targetRest = descansoSegundos || descansoDefectoSegundos;
     const targetEndTime = Date.now() + targetRest * 1000;
 
@@ -176,7 +185,6 @@ export const LiveWorkoutTracker: React.FC<LiveWorkoutTrackerProps> = ({
     setRestEndTime(targetEndTime);
     setIsRestActive(true);
 
-    // Programar alerta nativa en Service Worker para pantalla bloqueada
     scheduleRestNotification({
       delaySeconds: targetRest,
     });
@@ -239,11 +247,11 @@ export const LiveWorkoutTracker: React.FC<LiveWorkoutTrackerProps> = ({
           </div>
 
           {/* Real-time stats */}
-          <div className="flex items-center gap-4 text-center">
+          <div className="flex items-center gap-3 text-center">
             <div>
               <p className="text-[10px] uppercase font-bold text-gray-400">Volumen</p>
               <p className="text-sm font-black font-tabular text-emerald-300">
-                {totalVolumeKg.toLocaleString()} <span className="text-[10px] font-normal">kg</span>
+                {totalVolumeKg.toLocaleString()} <span className="text-[10px] font-normal">{unidadPeso}</span>
               </p>
             </div>
             <div>
@@ -252,6 +260,35 @@ export const LiveWorkoutTracker: React.FC<LiveWorkoutTrackerProps> = ({
                 {completedSetsCount}/{totalSetsCount}
               </p>
             </div>
+
+            {/* Alternador de Unidad con Conversión Automática (KG <-> LBS) */}
+            {onToggleWeightUnit && (
+              <button
+                type="button"
+                onClick={onToggleWeightUnit}
+                className="flex items-center p-0.5 rounded-lg bg-[#141D2B] border border-[#25364D] text-[10px] font-black tracking-wider transition-all cursor-pointer shadow-inner active:scale-95 ml-1"
+                title="Toca para alternar y convertir automáticamente todos los pesos entre Kilogramos (kg) y Libras (lbs)"
+              >
+                <span
+                  className={`px-1.5 py-0.5 rounded-md transition-all ${
+                    unidadPeso === 'kg'
+                      ? 'bg-emerald-500 text-black shadow-sm font-black'
+                      : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  KG
+                </span>
+                <span
+                  className={`px-1.5 py-0.5 rounded-md transition-all ${
+                    unidadPeso === 'lbs'
+                      ? 'bg-cyan-400 text-black shadow-sm font-black'
+                      : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  LB
+                </span>
+              </button>
+            )}
           </div>
 
           {/* Finish Button */}
@@ -308,20 +345,22 @@ export const LiveWorkoutTracker: React.FC<LiveWorkoutTrackerProps> = ({
         </button>
       </div>
 
-      {/* Floating Rest Timer */}
-      <FloatingRestTimer
-        secondsLeft={restSecondsLeft}
-        totalSeconds={restTotalSeconds}
-        isActive={isRestActive}
-        tonoAlerta={tonoAlerta}
-        sonidoHabilitado={sonidoHabilitado}
-        onAddSeconds={handleAddSeconds}
-        onSkip={handleSkipRest}
-        onComplete={() => {
-          setIsRestActive(false);
-          setRestEndTime(null);
-        }}
-      />
+      {/* Floating Rest Timer (solo si no es provisto globalmente por App.tsx) */}
+      {!onTriggerRest && (
+        <FloatingRestTimer
+          secondsLeft={restSecondsLeft}
+          totalSeconds={restTotalSeconds}
+          isActive={isRestActive}
+          tonoAlerta={tonoAlerta}
+          sonidoHabilitado={sonidoHabilitado}
+          onAddSeconds={handleAddSeconds}
+          onSkip={handleSkipRest}
+          onComplete={() => {
+            setIsRestActive(false);
+            setRestEndTime(null);
+          }}
+        />
+      )}
 
       {/* Modal: Agregar Ejercicio */}
       {showAddExerciseModal && (

@@ -1,10 +1,12 @@
 // Servicio de almacenamiento local seguro e instantáneo para MetrikGym
 // Cero dependencia de latencia de red durante el entrenamiento.
-import type { SesionEntrenamiento } from '../types';
+import type { SesionEntrenamiento, Rutina } from '../types';
+import { HISTORIAL_DEMO_RECLUTADOR, RUTINAS_MILO, RUTINA_DEMO_RECLUTADOR } from '../data/seedData';
 
 const STORAGE_ACTIVE_SESSION = 'metrikgym_active_session';
 const STORAGE_OUTBOX_QUEUE = 'metrikgym_offline_outbox';
 const STORAGE_HISTORY = 'metrikgym_history';
+const STORAGE_ROUTINES = 'metrikgym_rutinas';
 const STORAGE_USER_SESSION = 'metrikgym_auth_session';
 
 export interface AuthSessionData {
@@ -111,17 +113,68 @@ export const storageService = {
     downloadAnchor.remove();
   },
 
-  // ================= HISTORIAL =================
-  getHistory(): SesionEntrenamiento[] {
+  // ================= HISTORIAL (PARTICIONADO POR USUARIO) =================
+  getHistory(userId?: number): SesionEntrenamiento[] {
+    const auth = this.getAuthSession();
+    const effectiveId = userId ?? (auth ? auth.id : 2);
+
+    // Reclutador / Invitado (id 999) ve estrictamente sus datos mock
+    if (effectiveId === 999 || auth?.isGuest) {
+      return HISTORIAL_DEMO_RECLUTADOR;
+    }
+
     try {
-      const raw = localStorage.getItem(STORAGE_HISTORY);
-      return raw ? JSON.parse(raw) : [];
+      const key = `${STORAGE_HISTORY}_user_${effectiveId}`;
+      const raw = localStorage.getItem(key) || localStorage.getItem(STORAGE_HISTORY);
+      if (!raw) return [];
+      const parsed: SesionEntrenamiento[] = JSON.parse(raw);
+      // Filtro estricto: excluir cualquier sesión demo/mock del reclutador (999)
+      return parsed.filter((s) => s.usuarioId === effectiveId || (!s.usuarioId && effectiveId === 2));
     } catch {
       return [];
     }
   },
 
-  saveHistory(history: SesionEntrenamiento[]) {
-    localStorage.setItem(STORAGE_HISTORY, JSON.stringify(history));
+  saveHistory(history: SesionEntrenamiento[], userId?: number) {
+    const auth = this.getAuthSession();
+    const effectiveId = userId ?? (auth ? auth.id : 2);
+
+    // Nunca guardar sesiones de prueba en el almacenamiento del usuario real
+    if (effectiveId === 999 || auth?.isGuest) return;
+
+    const key = `${STORAGE_HISTORY}_user_${effectiveId}`;
+    const userOnly = history.filter((s) => s.usuarioId === effectiveId || !s.usuarioId);
+    localStorage.setItem(key, JSON.stringify(userOnly));
+  },
+
+  // ================= RUTINAS (PARTICIONADAS POR USUARIO) =================
+  getRoutines(userId?: number): Rutina[] {
+    const auth = this.getAuthSession();
+    const effectiveId = userId ?? (auth ? auth.id : 2);
+
+    if (effectiveId === 999 || auth?.isGuest) {
+      return RUTINA_DEMO_RECLUTADOR;
+    }
+
+    try {
+      const key = `${STORAGE_ROUTINES}_user_${effectiveId}`;
+      const raw = localStorage.getItem(key) || localStorage.getItem(STORAGE_ROUTINES);
+      if (!raw) return RUTINAS_MILO;
+      const parsed: Rutina[] = JSON.parse(raw);
+      return parsed.filter((r) => r.usuarioId === effectiveId || (!r.usuarioId && effectiveId === 2));
+    } catch {
+      return RUTINAS_MILO;
+    }
+  },
+
+  saveRoutines(routines: Rutina[], userId?: number) {
+    const auth = this.getAuthSession();
+    const effectiveId = userId ?? (auth ? auth.id : 2);
+
+    if (effectiveId === 999 || auth?.isGuest) return;
+
+    const key = `${STORAGE_ROUTINES}_user_${effectiveId}`;
+    const userOnly = routines.filter((r) => r.usuarioId === effectiveId || !r.usuarioId);
+    localStorage.setItem(key, JSON.stringify(userOnly));
   },
 };

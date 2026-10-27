@@ -13,8 +13,11 @@ import { AuthModal } from './components/auth/AuthModal';
 import type { Ejercicio, Rutina, SesionEntrenamiento, UltimoRegistroEjercicio, SerieRegistro } from './types';
 import { CATALOGO_EJERCICIOS, RUTINAS_MILO, RUTINA_DEMO_RECLUTADOR, HISTORIAL_DEMO_RECLUTADOR } from './data/seedData';
 import { storageService } from './services/storageService';
+import { supabaseDirectService } from './services/supabaseDirectService';
 import { PulseLoader } from './components/common/PulseLoader';
 import { WorkoutCelebrationModal } from './components/workout/WorkoutCelebrationModal';
+import { FloatingRestTimer } from './components/workout/FloatingRestTimer';
+import { convertWeight } from './utils/weightConverter';
 
 const DEFAULT_PREFERENCES: UserPreferences = {
   avatarId: 'power-beast',
@@ -39,6 +42,37 @@ export function App() {
   const [isFinishingWorkout, setIsFinishingWorkout] = useState(false);
   const [celebrationSession, setCelebrationSession] = useState<SesionEntrenamiento | null>(null);
   const [isCelebrationOpen, setIsCelebrationOpen] = useState(false);
+
+  // Floating Rest Timer State Global (persiste entre cambios de pestaña y recarga)
+  const [restTimer, setRestTimer] = useState<{
+    isActive: boolean;
+    totalSeconds: number;
+    endTime: number | null;
+  }>(() => {
+    try {
+      const saved = localStorage.getItem('metrikgym_rest_timer');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.endTime && parsed.endTime > Date.now()) {
+          return {
+            isActive: true,
+            totalSeconds: parsed.totalSeconds || 90,
+            endTime: parsed.endTime,
+          };
+        }
+      }
+    } catch (e) {
+      console.warn('Error reading rest timer', e);
+    }
+    return { isActive: false, totalSeconds: 90, endTime: null };
+  });
+
+  const [restSecondsLeft, setRestSecondsLeft] = useState<number>(() => {
+    if (restTimer.isActive && restTimer.endTime) {
+      return Math.max(0, Math.ceil((restTimer.endTime - Date.now()) / 1000));
+    }
+    return 0;
+  });
   
   // Preferencias de usuario
   const [preferences, setPreferences] = useState<UserPreferences>(() => {
@@ -53,11 +87,14 @@ export function App() {
   });
 
   const [rutinas, setRutinas] = useState<Rutina[]>(() => {
-    const saved = localStorage.getItem('metrikgym_rutinas');
-    return saved ? JSON.parse(saved) : RUTINAS_MILO;
+    const auth = storageService.getAuthSession();
+    return storageService.getRoutines(auth?.id);
   });
 
-  const [historial, setHistorial] = useState<SesionEntrenamiento[]>(() => storageService.getHistory());
+  const [historial, setHistorial] = useState<SesionEntrenamiento[]>(() => {
+    const auth = storageService.getAuthSession();
+    return storageService.getHistory(auth?.id);
+  });
   const [ultimosRegistros, setUltimosRegistros] = useState<UltimoRegistroEjercicio[]>(() => {
     const saved = localStorage.getItem('metrikgym_ultimos_registros');
     return saved ? JSON.parse(saved) : [];
@@ -69,12 +106,21 @@ export function App() {
     localStorage.setItem('metrikgym_preferences', JSON.stringify(updated));
   };
 
-  // Guardar historial en localStorage (solo para usuario real)
+  // Guardar historial en localStorage (solo para usuario real, particionado por ID)
   const handleSaveHistorial = (updated: SesionEntrenamiento[]) => {
     setHistorial(updated);
     const auth = storageService.getAuthSession();
     if (!auth?.isGuest) {
-      storageService.saveHistory(updated);
+      storageService.saveHistory(updated, auth?.id);
+    }
+  };
+
+  // Guardar rutinas en localStorage (particionado por ID)
+  const handleSaveRutinas = (updated: Rutina[]) => {
+    setRutinas(updated);
+    const auth = storageService.getAuthSession();
+    if (!auth?.isGuest) {
+      storageService.saveRoutines(updated, auth?.id);
     }
   };
 
@@ -105,6 +151,41 @@ export function App() {
     };
   }, []);
 
+  // Rest Timer Interval & Visibility Listener
+  useEffect(() => {
+    if (!restTimer.isActive || !restTimer.endTime) {
+      setRestSecondsLeft(0);
+      localStorage.removeItem('metrikgym_rest_timer');
+      return;
+    }
+
+    localStorage.setItem('metrikgym_rest_timer', JSON.stringify(restTimer));
+
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((restTimer.endTime! - Date.now()) / 1000));
+      setRestSecondsLeft(remaining);
+      if (remaining <= 0) {
+        setRestTimer({ isActive: false, totalSeconds: restTimer.totalSeconds, endTime: null });
+        localStorage.removeItem('metrikgym_rest_timer');
+      }
+    };
+
+    tick();
+    const interval = setInterval(tick, 250);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        tick();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [restTimer]);
+
   // Verificar sesión con expiración de 4 horas y recuperar sesión activa
   useEffect(() => {
     const currentAuth = storageService.getAuthSession();
@@ -116,10 +197,31 @@ export function App() {
         setRutinas(RUTINA_DEMO_RECLUTADOR);
         setHistorial(HISTORIAL_DEMO_RECLUTADOR);
       } else {
-        // Milo: asegurar las 4 rutinas oficiales y su historial real
-        const savedRutinas = localStorage.getItem('metrikgym_rutinas');
-        setRutinas(savedRutinas ? JSON.parse(savedRutinas) : RUTINAS_MILO);
-        setHistorial(storageService.getHistory());
+        // Milo: asegurar rutinas e historial vinculados a su usuarioId
+        const userRutinas = storageService.getRoutines(currentAuth.id);
+        setRutinas(userRutinas.length > 0 ? userRutinas : RUTINAS_MILO);
+        
+        const localHistory = storageService.getHistory(currentAuth.id);
+        setHistorial(localHistory);
+
+        // Si está online, sincronizar en segundo plano con Supabase
+        if (navigator.onLine) {
+          supabaseDirectService.fetchUserHistoryFromSupabase(currentAuth.id)
+            .then((remoteSessions) => {
+              if (remoteSessions && remoteSessions.length > 0) {
+                const existingIds = new Set(localHistory.map((s) => s.id));
+                const newFromRemote = remoteSessions.filter((s) => !existingIds.has(s.id));
+                if (newFromRemote.length > 0) {
+                  const merged = [...localHistory, ...newFromRemote].sort(
+                    (a, b) => new Date(b.fechaHoraInicio).getTime() - new Date(a.fechaHoraInicio).getTime()
+                  );
+                  setHistorial(merged);
+                  storageService.saveHistory(merged, currentAuth.id);
+                }
+              }
+            })
+            .catch((err) => console.warn('Supabase background history fetch failed:', err));
+        }
       }
     }
 
@@ -131,8 +233,57 @@ export function App() {
     }
   }, []);
 
+  const handleTriggerRest = (descansoSegundos?: number | null) => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate([30, 40, 30]);
+    }
+    const targetRest = descansoSegundos || preferences.descansoDefectoSegundos || 90;
+    const targetEndTime = Date.now() + targetRest * 1000;
+    setRestTimer({
+      isActive: true,
+      totalSeconds: targetRest,
+      endTime: targetEndTime,
+    });
+    setRestSecondsLeft(targetRest);
+  };
 
+  const handleAddRestSeconds = (sec: number) => {
+    setRestTimer((prev) => {
+      const nextEnd = (prev.endTime ? prev.endTime : Date.now()) + sec * 1000;
+      return {
+        isActive: true,
+        totalSeconds: Math.max(prev.totalSeconds, prev.totalSeconds + sec),
+        endTime: nextEnd,
+      };
+    });
+  };
 
+  const handleSkipRest = () => {
+    setRestTimer({ isActive: false, totalSeconds: preferences.descansoDefectoSegundos || 90, endTime: null });
+    setRestSecondsLeft(0);
+    localStorage.removeItem('metrikgym_rest_timer');
+  };
+
+  // Alternar unidad de peso (kg <-> lbs) y convertir en vivo los pesos de la sesión activa
+  const handleToggleWeightUnit = () => {
+    const nextUnit: 'kg' | 'lbs' = preferences.unidadPeso === 'kg' ? 'lbs' : 'kg';
+    const updatedPrefs: UserPreferences = { ...preferences, unidadPeso: nextUnit };
+    handleSavePreferences(updatedPrefs);
+
+    if (activeSession && activeSession.series.length > 0) {
+      const convertedSeries = activeSession.series.map((s) => ({
+        ...s,
+        pesoKg: convertWeight(s.pesoKg, preferences.unidadPeso, nextUnit),
+        pesoKgIzq: s.pesoKgIzq !== undefined && s.pesoKgIzq !== null
+          ? convertWeight(s.pesoKgIzq, preferences.unidadPeso, nextUnit)
+          : s.pesoKgIzq,
+      }));
+      handleUpdateActiveSession({
+        ...activeSession,
+        series: convertedSeries,
+      });
+    }
+  };
 
   const getRutinaSugeridaHoy = (): Rutina | undefined => {
     if (rutinas.length === 0) return undefined;
@@ -160,9 +311,29 @@ export function App() {
       setRutinas(RUTINA_DEMO_RECLUTADOR);
       setHistorial(HISTORIAL_DEMO_RECLUTADOR);
     } else {
-      const saved = localStorage.getItem('metrikgym_rutinas');
-      setRutinas(saved ? JSON.parse(saved) : RUTINAS_MILO);
-      setHistorial(storageService.getHistory());
+      const userRutinas = storageService.getRoutines(userData.id);
+      setRutinas(userRutinas.length > 0 ? userRutinas : RUTINAS_MILO);
+      
+      const localHistory = storageService.getHistory(userData.id);
+      setHistorial(localHistory);
+
+      if (navigator.onLine) {
+        supabaseDirectService.fetchUserHistoryFromSupabase(userData.id)
+          .then((remoteSessions) => {
+            if (remoteSessions && remoteSessions.length > 0) {
+              const existingIds = new Set(localHistory.map((s) => s.id));
+              const newFromRemote = remoteSessions.filter((s) => !existingIds.has(s.id));
+              if (newFromRemote.length > 0) {
+                const merged = [...localHistory, ...newFromRemote].sort(
+                  (a, b) => new Date(b.fechaHoraInicio).getTime() - new Date(a.fechaHoraInicio).getTime()
+                );
+                setHistorial(merged);
+                storageService.saveHistory(merged, userData.id);
+              }
+            }
+          })
+          .catch((err) => console.warn('Supabase fetch failed on login:', err));
+      }
     }
   };
 
@@ -436,8 +607,7 @@ export function App() {
       }),
     };
     const updated = [...rutinas, nueva];
-    setRutinas(updated);
-    localStorage.setItem('metrikgym_rutinas', JSON.stringify(updated));
+    handleSaveRutinas(updated);
   };
 
   const handleUpdateRoutine = (id: number, data: { nombre: string; diaSugerido?: string; activa: boolean; ejercicios: any[] }) => {
@@ -463,14 +633,12 @@ export function App() {
         }),
       };
     });
-    setRutinas(updated);
-    localStorage.setItem('metrikgym_rutinas', JSON.stringify(updated));
+    handleSaveRutinas(updated);
   };
 
   const handleDeleteRoutine = (rutinaId: number) => {
     const updated = rutinas.filter((r) => r.id !== rutinaId);
-    setRutinas(updated);
-    localStorage.setItem('metrikgym_rutinas', JSON.stringify(updated));
+    handleSaveRutinas(updated);
   };
 
   const handleCreateEjercicio = (data: { nombre: string; grupoMuscular: string; esUnilateral: boolean; crearComoGlobal?: boolean }) => {
@@ -576,7 +744,10 @@ export function App() {
                 sonidoHabilitado={preferences.sonidoHabilitado}
                 descansoDefectoSegundos={preferences.descansoDefectoSegundos}
                 onFinishWorkout={handleFinishWorkout}
-                onCancelWorkout={() => setActiveSession(null)}
+                onCancelWorkout={() => {
+                  handleUpdateActiveSession(null);
+                  handleSkipRest();
+                }}
                 onAddSerieToExercise={handleAddSerieToExercise}
                 onDeleteSerie={handleDeleteSerie}
                 onUpdateSerieField={handleUpdateSerieField}
@@ -584,6 +755,8 @@ export function App() {
                 onAddExerciseToWorkout={handleAddExerciseToWorkout}
                 onSwapExercise={handleSwapExercise}
                 unidadPeso={preferences.unidadPeso}
+                onTriggerRest={handleTriggerRest}
+                onToggleWeightUnit={handleToggleWeightUnit}
               />
             ) : (
               <div className="p-8 rounded-2xl bg-[#131B26] border border-[#1F2C3F] text-center space-y-3">
@@ -635,6 +808,9 @@ export function App() {
               onSavePreferences={handleSavePreferences}
               onLogout={() => {
                 storageService.clearAuthSession();
+                handleSkipRest();
+                handleUpdateActiveSession(null);
+                setHistorial([]);
                 setIsAuthModalOpen(true);
               }}
             />
@@ -679,6 +855,22 @@ export function App() {
         sesion={celebrationSession}
         userName={preferences.nombre}
         unidadPeso={preferences.unidadPeso}
+      />
+
+      {/* Floating Rest Timer Global (Persistente entre pestañas) */}
+      <FloatingRestTimer
+        secondsLeft={restSecondsLeft}
+        totalSeconds={restTimer.totalSeconds}
+        isActive={restTimer.isActive}
+        tonoAlerta={preferences.tonoAlerta}
+        sonidoHabilitado={preferences.sonidoHabilitado}
+        onAddSeconds={handleAddRestSeconds}
+        onSkip={handleSkipRest}
+        onComplete={() => {
+          setRestTimer({ isActive: false, totalSeconds: restTimer.totalSeconds, endTime: null });
+          localStorage.removeItem('metrikgym_rest_timer');
+        }}
+        onNavigateToWorkout={() => setCurrentTab('workout')}
       />
 
     </div>

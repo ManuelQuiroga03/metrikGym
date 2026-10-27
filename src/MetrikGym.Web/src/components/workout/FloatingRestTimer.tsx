@@ -11,6 +11,7 @@ interface FloatingRestTimerProps {
   onAddSeconds: (sec: number) => void;
   onSkip: () => void;
   onComplete: () => void;
+  onNavigateToWorkout?: () => void;
 }
 
 export const FloatingRestTimer: React.FC<FloatingRestTimerProps> = ({
@@ -21,7 +22,8 @@ export const FloatingRestTimer: React.FC<FloatingRestTimerProps> = ({
   sonidoHabilitado = true,
   onAddSeconds,
   onSkip,
-  onComplete
+  onComplete,
+  onNavigateToWorkout,
 }) => {
   // Formato MM:SS
   const formatTime = (secs: number) => {
@@ -65,7 +67,11 @@ export const FloatingRestTimer: React.FC<FloatingRestTimerProps> = ({
         <div className="flex items-center justify-between gap-3">
           
           {/* Timer Clock */}
-          <div className="flex items-center gap-2.5">
+          <div
+            onClick={onNavigateToWorkout}
+            className={`flex items-center gap-2.5 ${onNavigateToWorkout ? 'cursor-pointer hover:opacity-90' : ''}`}
+            title={onNavigateToWorkout ? 'Toca para volver a la pantalla de entrenamiento' : undefined}
+          >
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
               isCompleted 
                 ? 'bg-emerald-500 text-white' 
