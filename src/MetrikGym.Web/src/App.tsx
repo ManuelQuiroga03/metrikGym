@@ -18,6 +18,7 @@ import { PulseLoader } from './components/common/PulseLoader';
 import { WorkoutCelebrationModal } from './components/workout/WorkoutCelebrationModal';
 import { FloatingRestTimer } from './components/workout/FloatingRestTimer';
 import { convertWeight } from './utils/weightConverter';
+import { playRestAlert, initAudioContext } from './utils/audio';
 
 const DEFAULT_PREFERENCES: UserPreferences = {
   avatarId: 'power-beast',
@@ -165,6 +166,7 @@ export function App() {
       const remaining = Math.max(0, Math.ceil((restTimer.endTime! - Date.now()) / 1000));
       setRestSecondsLeft(remaining);
       if (remaining <= 0) {
+        playRestAlert(preferences.tonoAlerta, preferences.sonidoHabilitado);
         setRestTimer({ isActive: false, totalSeconds: restTimer.totalSeconds, endTime: null });
         localStorage.removeItem('metrikgym_rest_timer');
       }
@@ -234,6 +236,7 @@ export function App() {
   }, []);
 
   const handleTriggerRest = (descansoSegundos?: number | null) => {
+    initAudioContext();
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate([30, 40, 30]);
     }
@@ -867,6 +870,7 @@ export function App() {
         onAddSeconds={handleAddRestSeconds}
         onSkip={handleSkipRest}
         onComplete={() => {
+          playRestAlert(preferences.tonoAlerta, preferences.sonidoHabilitado);
           setRestTimer({ isActive: false, totalSeconds: restTimer.totalSeconds, endTime: null });
           localStorage.removeItem('metrikgym_rest_timer');
         }}

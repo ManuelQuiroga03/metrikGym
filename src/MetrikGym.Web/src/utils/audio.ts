@@ -10,6 +10,25 @@ export const TONOS_DISPONIBLES: Array<{ id: TonoAlerta; label: string; descripci
   { id: 'mute', label: 'Silencioso (Solo Vibración)', descripcion: 'Sin sonido, ideal si escuchas música' },
 ];
 
+// Instancia compartida para evitar bloqueos de autoplay en navegadores móviles
+let sharedAudioContext: AudioContext | null = null;
+
+export function initAudioContext() {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (AudioCtx) {
+      if (!sharedAudioContext) {
+        sharedAudioContext = new AudioCtx();
+      }
+      if (sharedAudioContext.state === 'suspended') {
+        sharedAudioContext.resume();
+      }
+    }
+  } catch (err) {
+    console.warn('[AudioSynthesizer] Error inicializando AudioContext:', err);
+  }
+}
+
 export function playRestAlert(tone: TonoAlerta = 'beep', soundEnabled: boolean = true) {
   // Vibración háptica siempre que el dispositivo lo soporte
   if ('vibrate' in navigator) {
@@ -23,9 +42,12 @@ export function playRestAlert(tone: TonoAlerta = 'beep', soundEnabled: boolean =
   if (!soundEnabled || tone === 'mute') return;
 
   try {
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
+    initAudioContext();
+    const ctx = sharedAudioContext || new (window.AudioContext || (window as any).webkitAudioContext)();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
 
     if (tone === 'beep') {
       // 3 beeps cortos consecutivos

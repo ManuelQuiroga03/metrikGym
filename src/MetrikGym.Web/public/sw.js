@@ -1,5 +1,5 @@
 // Service Worker de MetrikGym para soporte offline y notificaciones en pantalla bloqueada
-const CACHE_NAME = 'metrikgym-v1';
+const CACHE_NAME = 'metrikgym-v2';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -35,8 +35,8 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body,
-    icon: '/favicon.svg',
-    badge: '/favicon.svg',
+    icon: '/pwa-192x192.png',
+    badge: '/pwa-192x192.png',
     tag: 'rest-timer-alert',
     renotify: true,
     requireInteraction: true,
@@ -67,8 +67,8 @@ self.addEventListener('message', (event) => {
 
       self.registration.showNotification(title, {
         body,
-        icon: '/favicon.svg',
-        badge: '/favicon.svg',
+        icon: '/pwa-192x192.png',
+        badge: '/pwa-192x192.png',
         tag: 'rest-timer-alert',
         renotify: true,
         requireInteraction: true,

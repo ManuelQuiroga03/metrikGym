@@ -47,7 +47,8 @@ export async function scheduleRestNotification(options: {
         body: options.exerciseName
           ? `Es hora de la Serie #${options.nextSetNumber || ''} de ${options.exerciseName}.`
           : 'Tu descanso ha finalizado. Regresa a tu entrenamiento.',
-        icon: '/favicon.svg',
+        icon: '/pwa-192x192.png',
+        badge: '/pwa-192x192.png',
       });
     }, options.delaySeconds * 1000);
   } catch (err) {
@@ -65,14 +66,15 @@ export function sendImmediateTestNotification() {
       navigator.serviceWorker.ready.then((reg) => {
         reg.showNotification('⚡ MetrikGym: Alerta de Prueba', {
           body: '¡Excelente! Las notificaciones en pantalla bloqueada están funcionando al 100%.',
-          icon: '/favicon.svg',
-          badge: '/favicon.svg',
+          icon: '/pwa-192x192.png',
+          badge: '/pwa-192x192.png',
         } as any);
       });
     } else {
       new Notification('⚡ MetrikGym: Alerta de Prueba', {
         body: '¡Excelente! Las notificaciones están activadas correctamente.',
-        icon: '/favicon.svg',
+        icon: '/pwa-192x192.png',
+        badge: '/pwa-192x192.png',
       });
     }
   } catch (err) {
