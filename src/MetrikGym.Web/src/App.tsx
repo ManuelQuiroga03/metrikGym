@@ -419,15 +419,18 @@ export function App() {
   };
 
 
-  const handleFinishWorkout = (notas?: string) => {
+  const handleFinishWorkout = (notas?: string, fechaFinIso?: string) => {
     if (!activeSession) return;
+
+    // Matar cualquier temporizador de descanso activo de inmediato
+    handleSkipRest();
 
     // Mostrar loader de guardado por 1.5 segundos
     setIsFinishingWorkout(true);
 
     const finalizada: SesionEntrenamiento = {
       ...activeSession,
-      fechaHoraFin: new Date().toISOString(),
+      fechaHoraFin: fechaFinIso || new Date().toISOString(),
       notas,
     };
 

@@ -13,7 +13,7 @@ interface LiveWorkoutTrackerProps {
   tonoAlerta?: TonoAlerta;
   sonidoHabilitado?: boolean;
   descansoDefectoSegundos?: number;
-  onFinishWorkout: (notas?: string) => void;
+  onFinishWorkout: (notas?: string, fechaFinIso?: string) => void;
   onCancelWorkout?: () => void;
   onAddSerieToExercise: (ejercicioId: number) => void;
   onDeleteSerie: (serieId: number) => void;
@@ -57,10 +57,13 @@ export const LiveWorkoutTracker: React.FC<LiveWorkoutTrackerProps> = ({
   const [showAddExerciseModal, setShowAddExerciseModal] = useState(false);
   const [exerciseSearchTerm, setExerciseSearchTerm] = useState('');
   const [finishModalOpen, setFinishModalOpen] = useState(false);
+  const [frozenEndTime, setFrozenEndTime] = useState<string | null>(null);
   const [workoutNotes, setWorkoutNotes] = useState('');
 
-  // Clock tick (Sesión total)
+  // Clock tick (Sesión total) - se congela cuando se abre el modal de finalización
   useEffect(() => {
+    if (finishModalOpen) return;
+
     const updateElapsed = () => {
       const startTime = new Date(sesion.fechaHoraInicio).getTime();
       const now = Date.now();
@@ -70,7 +73,18 @@ export const LiveWorkoutTracker: React.FC<LiveWorkoutTrackerProps> = ({
     updateElapsed();
     const interval = setInterval(updateElapsed, 1000);
     return () => clearInterval(interval);
-  }, [sesion.fechaHoraInicio]);
+  }, [sesion.fechaHoraInicio, finishModalOpen]);
+
+  // Al abrir el modal de finalización, congelar marca temporal de cierre
+  const handleOpenFinishModal = () => {
+    setFrozenEndTime(new Date().toISOString());
+    setFinishModalOpen(true);
+  };
+
+  const handleResumeWorkout = () => {
+    setFrozenEndTime(null);
+    setFinishModalOpen(false);
+  };
 
   // Rest timer tick basado en timestamp absoluto (resiste suspensión de pantalla en móvil)
   useEffect(() => {
@@ -152,7 +166,7 @@ export const LiveWorkoutTracker: React.FC<LiveWorkoutTrackerProps> = ({
   const completedSetsCount = sesion.series.filter((s) => s.completada).length;
   const totalSetsCount = sesion.series.length;
 
-  // Toggle complete and auto-trigger rest timer
+  // Toggle complete and auto-trigger rest timer (con detección inteligente de última serie)
   const handleToggleComplete = (serieId: number, descansoSegundos?: number | null) => {
     const serie = sesion.series.find((s) => s.id === serieId);
     if (!serie) return;
@@ -161,6 +175,17 @@ export const LiveWorkoutTracker: React.FC<LiveWorkoutTrackerProps> = ({
     onUpdateSerieField(serieId, 'completada', nextState);
 
     if (nextState) {
+      // Verificar si quedan otras series pendientes en la sesión completa
+      const pendingSets = sesion.series.filter((s) => s.id !== serieId && !s.completada);
+      if (pendingSets.length === 0) {
+        // ¡Última serie de todo el entreno completada! No tiene sentido descansar; congelar tiempo y abrir modal.
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          navigator.vibrate([100, 50, 100]);
+        }
+        handleOpenFinishModal();
+        return;
+      }
+
       handleTriggerRest(descansoSegundos);
     }
   };
@@ -293,7 +318,7 @@ export const LiveWorkoutTracker: React.FC<LiveWorkoutTrackerProps> = ({
 
           {/* Finish Button */}
           <button
-            onClick={() => setFinishModalOpen(true)}
+            onClick={handleOpenFinishModal}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-black font-black text-xs shadow-lg shadow-emerald-950/60 active:scale-95 transition-all cursor-pointer"
           >
             <CheckSquare className="w-4 h-4 stroke-[2.5px]" />
@@ -441,7 +466,7 @@ export const LiveWorkoutTracker: React.FC<LiveWorkoutTrackerProps> = ({
 
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setFinishModalOpen(false)}
+                onClick={handleResumeWorkout}
                 className="flex-1 py-2.5 rounded-xl bg-[#182333] hover:bg-[#202F44] text-gray-300 font-bold text-xs cursor-pointer"
               >
                 Seguir Entrenando
@@ -450,7 +475,7 @@ export const LiveWorkoutTracker: React.FC<LiveWorkoutTrackerProps> = ({
               <button
                 onClick={() => {
                   setFinishModalOpen(false);
-                  onFinishWorkout(workoutNotes);
+                  onFinishWorkout(workoutNotes, frozenEndTime || new Date().toISOString());
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs shadow-lg shadow-emerald-950 cursor-pointer"
               >

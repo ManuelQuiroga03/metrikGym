@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Dumbbell, Lock, Mail, ArrowRight, AlertCircle, Sparkles, ShieldCheck, Briefcase } from 'lucide-react';
+import { Dumbbell, Lock, Mail, ArrowRight, AlertCircle, Sparkles, ShieldCheck, Briefcase, Shield } from 'lucide-react';
 import { storageService } from '../../services/storageService';
 import { PulseLoader } from '../common/PulseLoader';
+import { LegalModal, type LegalTab } from '../common/LegalModal';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -16,6 +17,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
   const [loadingLabel, setLoadingLabel] = useState('');
   const [loadingColor, setLoadingColor] = useState<'emerald' | 'cyan'>('emerald');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isLegalOpen, setIsLegalOpen] = useState(false);
+  const [legalTab, setLegalTab] = useState<LegalTab>('terms');
+
+  const openLegal = (tab: LegalTab) => {
+    setLegalTab(tab);
+    setIsLegalOpen(true);
+  };
 
   if (!isOpen) return null;
 
@@ -183,12 +191,49 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onSuccess }) => {
               </button>
             </form>
 
-            <p className="text-[11px] text-gray-500 text-center mt-4">
-              La sesión se mantiene activa de forma segura durante 4 horas.
-            </p>
+            {/* Aviso de Privacidad y Términos para Cumplimiento Legal */}
+            <div className="mt-4 pt-3.5 border-t border-[#1C283A] text-center space-y-1.5">
+              <p className="text-[10px] text-gray-400 leading-tight">
+                Al acceder aceptas nuestros{' '}
+                <button
+                  type="button"
+                  onClick={() => openLegal('terms')}
+                  className="text-emerald-400 hover:underline font-semibold cursor-pointer"
+                >
+                  Términos de Uso
+                </button>
+                ,{' '}
+                <button
+                  type="button"
+                  onClick={() => openLegal('privacy')}
+                  className="text-cyan-400 hover:underline font-semibold cursor-pointer"
+                >
+                  Privacidad Local-First
+                </button>
+                {' '}y{' '}
+                <button
+                  type="button"
+                  onClick={() => openLegal('health')}
+                  className="text-amber-400 hover:underline font-semibold cursor-pointer"
+                >
+                  Deslinde Médico
+                </button>.
+              </p>
+              <p className="text-[10px] text-gray-500 flex items-center justify-center gap-1">
+                <Shield className="w-3 h-3 text-emerald-400" />
+                <span>Sin cookies de rastreo de terceros • Sesión de 4h</span>
+              </p>
+            </div>
           </>
         )}
       </div>
+
+      {/* Modal Legal Integrado */}
+      <LegalModal
+        isOpen={isLegalOpen}
+        onClose={() => setIsLegalOpen(false)}
+        initialTab={legalTab}
+      />
     </div>
   );
 };

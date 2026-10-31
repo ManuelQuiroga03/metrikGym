@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Volume2, Bell, Vibrate, Dumbbell, Play, Save, Check, Sparkles, LogOut, Database, Cloud, Download, RefreshCw, FileCode, CheckCircle2, Trash2 } from 'lucide-react';
+import { Volume2, Bell, Vibrate, Dumbbell, Play, Save, Check, Sparkles, LogOut, Database, Cloud, Download, RefreshCw, FileCode, CheckCircle2, Trash2, Shield, FileText } from 'lucide-react';
 import { TONOS_DISPONIBLES, playRestAlert, type TonoAlerta } from '../../utils/audio';
 import { AVATARES_PREDISEÑADOS } from '../../utils/avatars';
 import { storageService } from '../../services/storageService';
 import { supabaseDirectService } from '../../services/supabaseDirectService';
+import { LegalModal, type LegalTab } from '../common/LegalModal';
 
 export interface UserPreferences {
   avatarId: string;
@@ -33,6 +34,13 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
 }) => {
   const [formState, setFormState] = useState<UserPreferences>(preferences);
   const [savedFeedback, setSavedFeedback] = useState(false);
+  const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
+  const [selectedLegalTab, setSelectedLegalTab] = useState<LegalTab>('terms');
+
+  const openLegalModal = (tab: LegalTab) => {
+    setSelectedLegalTab(tab);
+    setIsLegalModalOpen(true);
+  };
 
   useEffect(() => {
     setFormState(preferences);
@@ -393,7 +401,56 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
       {/* 4. Respaldo y Sincronización Local / Supabase */}
       <SyncBackupSection />
 
-      {/* 5. Cuenta y Sesión */}
+      {/* 5. Centro Legal & Cumplimiento Normativo */}
+      <div className="p-4 sm:p-5 rounded-2xl bg-[#131B26] border border-[#1F2C3F] shadow-xl space-y-3">
+        <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+          <Shield className="w-4 h-4 text-emerald-400" />
+          <span>Seguridad Legal & Privacidad</span>
+        </h3>
+        <p className="text-xs text-gray-400">
+          MetrikGym opera bajo un modelo de privacidad por diseño. Tus datos se guardan localmente en tu dispositivo.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+          <button
+            type="button"
+            onClick={() => openLegalModal('terms')}
+            className="p-3 rounded-xl bg-[#182333] hover:bg-[#202E42] border border-[#25364D] text-left transition-all cursor-pointer group"
+          >
+            <p className="text-xs font-bold text-white group-hover:text-emerald-400 flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Términos de Uso</span>
+            </p>
+            <p className="text-[10px] text-gray-400 mt-0.5">Reglas de la plataforma</p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openLegalModal('privacy')}
+            className="p-3 rounded-xl bg-[#182333] hover:bg-[#202E42] border border-[#25364D] text-left transition-all cursor-pointer group"
+          >
+            <p className="text-xs font-bold text-white group-hover:text-cyan-400 flex items-center gap-1.5">
+              <Database className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Privacidad</span>
+            </p>
+            <p className="text-[10px] text-gray-400 mt-0.5">Sin rastreo ni cookies</p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openLegalModal('health')}
+            className="p-3 rounded-xl bg-[#182333] hover:bg-[#202E42] border border-[#25364D] text-left transition-all cursor-pointer group"
+          >
+            <p className="text-xs font-bold text-white group-hover:text-amber-400 flex items-center gap-1.5">
+              <Shield className="w-3.5 h-3.5 text-amber-400" />
+              <span>Deslinde Médico</span>
+            </p>
+            <p className="text-[10px] text-gray-400 mt-0.5">Seguridad y salud física</p>
+          </button>
+        </div>
+      </div>
+
+      {/* 6. Cuenta y Sesión */}
       <div className="pt-2">
         <button
           onClick={onLogout}
@@ -403,6 +460,13 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
           <span>Cerrar Sesión</span>
         </button>
       </div>
+
+      {/* Modal Legal Integrado */}
+      <LegalModal
+        isOpen={isLegalModalOpen}
+        onClose={() => setIsLegalModalOpen(false)}
+        initialTab={selectedLegalTab}
+      />
     </div>
   );
 };
