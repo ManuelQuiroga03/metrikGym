@@ -56,6 +56,20 @@ export async function scheduleRestNotification(options: {
   }
 }
 
+export async function cancelRestNotification() {
+  if (!isNotificationSupported()) return;
+  try {
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.ready;
+      if (reg.active) {
+        reg.active.postMessage({ type: 'CANCEL_REST_ALERT' });
+      }
+    }
+  } catch (err) {
+    console.warn('No se pudo cancelar la alerta de descanso:', err);
+  }
+}
+
 export function sendImmediateTestNotification() {
   if (!isNotificationSupported() || Notification.permission !== 'granted') {
     return;

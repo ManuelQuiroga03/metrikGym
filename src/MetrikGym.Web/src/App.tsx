@@ -19,6 +19,7 @@ import { WorkoutCelebrationModal } from './components/workout/WorkoutCelebration
 import { FloatingRestTimer } from './components/workout/FloatingRestTimer';
 import { convertWeight } from './utils/weightConverter';
 import { playRestAlert, initAudioContext } from './utils/audio';
+import { scheduleRestNotification, cancelRestNotification } from './utils/notifications';
 
 const DEFAULT_PREFERENCES: UserPreferences = {
   avatarId: 'power-beast',
@@ -248,11 +249,19 @@ export function App() {
       endTime: targetEndTime,
     });
     setRestSecondsLeft(targetRest);
+
+    // Programar notificación de sistema con sonido y vibración en segundo plano (para cuando el cel esté bloqueado)
+    scheduleRestNotification({
+      delaySeconds: targetRest,
+    });
   };
 
   const handleAddRestSeconds = (sec: number) => {
     setRestTimer((prev) => {
       const nextEnd = (prev.endTime ? prev.endTime : Date.now()) + sec * 1000;
+      scheduleRestNotification({
+        delaySeconds: Math.ceil((nextEnd - Date.now()) / 1000),
+      });
       return {
         isActive: true,
         totalSeconds: Math.max(prev.totalSeconds, prev.totalSeconds + sec),
@@ -262,6 +271,7 @@ export function App() {
   };
 
   const handleSkipRest = () => {
+    cancelRestNotification();
     setRestTimer({ isActive: false, totalSeconds: preferences.descansoDefectoSegundos || 90, endTime: null });
     setRestSecondsLeft(0);
     localStorage.removeItem('metrikgym_rest_timer');
@@ -446,25 +456,60 @@ export function App() {
       storageService.addToOutbox(finalizada);
     }
 
-    // 3. Actualizar caché de últimos registros para progressive overload
+    // 3. Actualizar caché de últimos registros para sobrecarga progresiva inteligente
+    // Agrupar sets completados por ejercicio y calcular la carga principal de trabajo (evita que un drop set de 15kg baje la carga de 20kg)
     const updatedUltimos: UltimoRegistroEjercicio[] = [...ultimosRegistros];
+    const setsByExercise = new Map<number, typeof completedSets>();
     completedSets.forEach((s) => {
-      const existingIdx = updatedUltimos.findIndex((u) => u.ejercicioId === s.ejercicioId);
+      const list = setsByExercise.get(s.ejercicioId) || [];
+      list.push(s);
+      setsByExercise.set(s.ejercicioId, list);
+    });
+
+    setsByExercise.forEach((sets, ejercicioId) => {
+      if (sets.length === 0) return;
+
+      // Calcular la carga principal de trabajo:
+      // 1. Contar frecuencias de peso (moda)
+      const weightFreq = new Map<number, number>();
+      let maxWeight = 0;
+      sets.forEach((st) => {
+        const w = Number(st.pesoKg || 0);
+        weightFreq.set(w, (weightFreq.get(w) || 0) + 1);
+        if (w > maxWeight) maxWeight = w;
+      });
+
+      // Elegir el peso con mayor frecuencia (moda), y si hay empate, el más alto
+      let workingWeight = maxWeight;
+      let highestFreq = 0;
+      weightFreq.forEach((freq, w) => {
+        if (freq > highestFreq || (freq === highestFreq && w > workingWeight)) {
+          highestFreq = freq;
+          workingWeight = w;
+        }
+      });
+
+      // Seleccionar una serie representativa de esa carga de trabajo
+      const representativeSet = sets.find((s) => Number(s.pesoKg || 0) === workingWeight) || sets[sets.length - 1];
+
       const newEntry: UltimoRegistroEjercicio = {
-        ejercicioId: s.ejercicioId,
-        ejercicioNombre: s.ejercicioNombre,
+        ejercicioId,
+        ejercicioNombre: representativeSet.ejercicioNombre || 'Ejercicio',
         fechaHora: finalizada.fechaHoraFin || new Date().toISOString(),
-        pesoKg: s.pesoKg,
-        repeticiones: s.repeticiones,
-        rpe: s.rpe,
-        lado: s.lado,
+        pesoKg: workingWeight,
+        repeticiones: representativeSet.repeticiones,
+        rpe: representativeSet.rpe,
+        lado: representativeSet.lado,
       };
+
+      const existingIdx = updatedUltimos.findIndex((u) => u.ejercicioId === ejercicioId);
       if (existingIdx >= 0) {
         updatedUltimos[existingIdx] = newEntry;
       } else {
         updatedUltimos.push(newEntry);
       }
     });
+
     handleSaveUltimosRegistros(updatedUltimos);
 
     // 4. Limpiar sesión activa

@@ -1,5 +1,5 @@
 // Service Worker de MetrikGym para soporte offline y notificaciones en pantalla bloqueada
-const CACHE_NAME = 'metrikgym-v2';
+const CACHE_NAME = 'metrikgym-v3';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -18,49 +18,24 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Manejo de evento Push nativo (cuando llega por push del servidor)
-self.addEventListener('push', (event) => {
-  let data = {
-    title: '⚡ ¡Tiempo de descanso terminado!',
-    body: 'Tu tiempo de recuperación ha finalizado. Regresa a tu entrenamiento.',
-  };
+// Timer activo en Service Worker para evitar congelamiento de descansos
+let restAlertTimerId = null;
 
-  if (event.data) {
-    try {
-      data = event.data.json();
-    } catch {
-      data.body = event.data.text();
-    }
-  }
-
-  const options = {
-    body: data.body,
-    icon: '/pwa-192x192.png',
-    badge: '/pwa-192x192.png',
-    tag: 'rest-timer-alert',
-    renotify: true,
-    requireInteraction: true,
-    silent: false,
-    vibrate: [300, 150, 300, 150, 400],
-    actions: [
-      { action: 'open', title: 'Abrir MetrikGym' }
-    ],
-    data: {
-      url: '/'
-    }
-  };
-
-  event.waitUntil(self.registration.showNotification(data.title, options));
-});
-
-// Manejo de mensajes desde la app (ej. programar notificación de descanso en segundo plano)
+// Manejo de mensajes desde la app (programar alerta de descanso en segundo plano)
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SCHEDULE_REST_ALERT') {
     const { delaySeconds, exerciseName, nextSetNumber } = event.data;
     
+    if (restAlertTimerId) {
+      clearTimeout(restAlertTimerId);
+      restAlertTimerId = null;
+    }
+
+    const delayMs = Math.max(1, (delaySeconds || 1) * 1000);
+    
     // Programar la alerta nativa en segundo plano
-    setTimeout(() => {
-      const title = '⚡ ¡Tiempo de descanso terminado!';
+    restAlertTimerId = setTimeout(() => {
+      const title = '⚡ ¡Descanso Terminado!';
       const body = exerciseName 
         ? `Es momento de realizar la Serie #${nextSetNumber || ''} de ${exerciseName}. ¡A darle!`
         : 'Tu tiempo de recuperación ha finalizado. Regresa a tu entrenamiento.';
@@ -73,7 +48,8 @@ self.addEventListener('message', (event) => {
         renotify: true,
         requireInteraction: true,
         silent: false,
-        vibrate: [300, 150, 300, 150, 400],
+        vibrate: [500, 250, 500, 250, 800, 300, 1000],
+        timestamp: Date.now(),
         actions: [
           { action: 'open', title: 'Abrir MetrikGym' }
         ],
@@ -81,7 +57,13 @@ self.addEventListener('message', (event) => {
           url: '/'
         }
       });
-    }, (delaySeconds || 1) * 1000);
+      restAlertTimerId = null;
+    }, delayMs);
+  } else if (event.data && event.data.type === 'CANCEL_REST_ALERT') {
+    if (restAlertTimerId) {
+      clearTimeout(restAlertTimerId);
+      restAlertTimerId = null;
+    }
   }
 });
 

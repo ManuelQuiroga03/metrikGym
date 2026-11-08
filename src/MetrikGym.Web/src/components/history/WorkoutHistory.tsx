@@ -12,6 +12,11 @@ import {
   Award,
 } from 'lucide-react';
 import type { SesionEntrenamiento } from '../../types';
+import { CATALOGO_EJERCICIOS } from '../../data/seedData';
+
+const ejCatalogMap = new Map<number, string>(
+  CATALOGO_EJERCICIOS.map((e) => [e.id, e.nombre])
+);
 
 interface WorkoutHistoryProps {
   historial: SesionEntrenamiento[];
@@ -79,15 +84,19 @@ export const WorkoutHistory: React.FC<WorkoutHistoryProps> = ({
               0
             );
 
-            // Group series by exercise
+            // Group series by exercise (agrupación robusta por ejercicioId o nombre)
             const exerciseGroups: {
               [key: string]: typeof sesion.series;
             } = {};
 
             sesion.series.forEach((s) => {
-              const key = s.ejercicioNombre || 'Ejercicio';
+              const nombreResuelto = s.ejercicioNombre || (s.ejercicioId ? ejCatalogMap.get(s.ejercicioId) : null) || 'Ejercicio';
+              const key = s.ejercicioId ? `ej_${s.ejercicioId}` : nombreResuelto;
               if (!exerciseGroups[key]) exerciseGroups[key] = [];
-              exerciseGroups[key].push(s);
+              exerciseGroups[key].push({
+                ...s,
+                ejercicioNombre: nombreResuelto,
+              });
             });
 
             return (
@@ -164,7 +173,9 @@ export const WorkoutHistory: React.FC<WorkoutHistoryProps> = ({
 
                     {/* Detailed Exercise Tables */}
                     <div className="space-y-3 pt-2">
-                      {Object.entries(exerciseGroups).map(([ejNombre, sets]) => {
+                      {Object.entries(exerciseGroups).map(([_groupKey, sets]) => {
+                        const primerSet = sets[0];
+                        const displayNombre = primerSet?.ejercicioNombre || ejCatalogMap.get(primerSet?.ejercicioId) || 'Ejercicio';
                         const maxWeight = Math.max(...sets.map((s) => Number(s.pesoKg || 0)));
                         const exerciseVolume = sets.reduce(
                           (acc, s) => acc + Number(s.pesoKg || 0) * Number(s.repeticiones || 0),
@@ -173,16 +184,16 @@ export const WorkoutHistory: React.FC<WorkoutHistoryProps> = ({
 
                         return (
                           <div
-                            key={ejNombre}
+                            key={_groupKey}
                             className="p-3.5 rounded-xl bg-[#141D2A] border border-[#1E2B3E] space-y-2"
                           >
                             <div className="flex items-center justify-between pb-1.5 border-b border-[#1E2B3E]">
                               <div>
                                 <h4 className="text-xs font-bold text-white tracking-tight">
-                                  {ejNombre}
+                                  {displayNombre}
                                 </h4>
                                 <span className="text-[10px] text-emerald-400 font-semibold">
-                                  {sets[0]?.grupoMuscular}
+                                  {primerSet?.grupoMuscular || 'General'}
                                 </span>
                               </div>
 

@@ -2,6 +2,11 @@
 // No depende de Render. Conexión directa y ultra rápida a la nube cuando hay red.
 import type { SesionEntrenamiento } from '../types';
 import { storageService } from './storageService';
+import { CATALOGO_EJERCICIOS } from '../data/seedData';
+
+const ejMap = new Map<number, string>(
+  CATALOGO_EJERCICIOS.map((e) => [e.id, e.nombre])
+);
 
 const SUPABASE_URL = 'https://suifqcukrcvhjwsuadhw.supabase.co/rest/v1';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN1aWZxY3VrcmN2aGp3c3VhZGh3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE4MjE5MzUsImV4cCI6MjEwNzM5NzkzNX0.Gr8u4GFRL-wU9li8bUuQ0rUslEcEzxQmyZrHcHD2W90';
@@ -125,6 +130,7 @@ export const supabaseDirectService = {
           id: sr.Id,
           sesionId: s.Id,
           ejercicioId: sr.EjercicioId,
+          ejercicioNombre: ejMap.get(sr.EjercicioId) || `Ejercicio #${sr.EjercicioId}`,
           numeroSerie: sr.NumeroSerie,
           pesoKg: sr.PesoKg,
           repeticiones: sr.Repeticiones,
